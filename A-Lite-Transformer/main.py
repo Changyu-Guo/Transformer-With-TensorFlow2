@@ -42,14 +42,15 @@ def create_look_ahead_mask(size):
 
 def scaled_dot_product_attention(q, k, v, mask):
     """
-    :param q: (batch_size, seq_len_q, hidden_size_q)
-    :param k: (batch_size, seq_len_q, hidden_size_q)
-    :param v: (batch_size, seq_len_v, hidden_size_v)
-    :param mask: (batch_size, seq_len, seq_len)
-    :return:
+    :param q: (batch_size, [num_heads], seq_len_q, hidden_size_q)
+    :param k: (batch_size, [num_heads], seq_len_k, hidden_size_k)
+    :param v: (batch_size, [num_heads], seq_len_v, hidden_size_v)
+    :param mask: (batch_size, 1, 1, seq_len)
+    hidden_size_q == hidden_size_k
+    seq_len_k == seq_len_v
     """
 
-    # (batch_size, seq_len_q, seq_len_q)
+    # (batch_size, [num_heads], seq_len_q, seq_len_k)
     matmul_qk = tf.matmul(q, k, transpose_b=True)
 
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
@@ -60,11 +61,11 @@ def scaled_dot_product_attention(q, k, v, mask):
         # softmax 之后接近于 0
         scaled_attention_logits += (mask * -1e9)
 
-    # (batch_size, seq_len_q, seq_len_q)
+    # (batch_size, [num_heads], seq_len_q, seq_len_k)
     attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
 
-    # (batch_size, seq_len_q, seq_len_q) * (batch_size, seq_len_v, hidden_size_v)
-    # -> (batch_size, seq_len, hidden_size)
+    # (batch_size, [num_heads], seq_len_q, seq_len_k) * (batch_size, [num_heads], seq_len_v, hidden_size_v)
+    # -> (batch_size, [num_heads], seq_len_q, hidden_size_v)
     output = tf.matmul(attention_weights, v)
 
     return output, attention_weights
@@ -334,5 +335,45 @@ def loss_function(real, pred):
     mask = tf.cast(mask, dtype=loss.dtype)
     loss *= mask
     return tf.reduce_mean(loss)
+
+
+def create_masks(inputs, target):
+    """
+    :param inputs: (batch_size, seq_len)
+    :param target: (batch_size, seq_len)
+    """
+    # (batch_size, 1, 1, seq_len)
+    encoder_padding_mask = create_padding_mask(inputs)
+
+    # (batch_size, 1, 1, seq_len)
+    decoder_padding_mask = create_padding_mask(inputs)
+
+    # (seq_len, seq_len)
+    look_ahead_mask = create_look_ahead_mask(tf.shape(target)[1])
+
+    # (batch_size, 1, 1, seq_len)
+    decoder_target_padding_mask = create_padding_mask(target)
+
+    # (batch_size, 1, seq_len, seq_len)
+    combined_mask = tf.maximum(decoder_target_padding_mask, look_ahead_mask)
+    return encoder_padding_mask, combined_mask, decoder_padding_mask
+
+
+if __name__ == '__main__':
+    transformer = Transformer(
+        num_layers=2,
+        d_model=512,
+        num_heads=8,
+        dff=1024,
+        input_vocab_size=8216,
+        target_vocab_size=8089,
+        pe_input=8216,
+        pe_target=8089,
+        drop_rate=0.1
+    )
+    inputs = tf.random.uniform((32, 64))
+    target = tf.random.uniform((32, 128))
+    encoder_padding_mask, combined_mask, decoder_padding_mask = create_masks(inputs, target)
+    transformer(inputs, target, True, encoder_padding_mask, combined_mask, decoder_padding_mask)
 
 
