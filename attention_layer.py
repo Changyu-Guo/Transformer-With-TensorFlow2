@@ -7,6 +7,7 @@ from __future__ import print_function
 import math
 import string
 import collections
+import numpy as np
 import tensorflow as tf
 from einsum_dense import EinsumDense
 import masked_softmax
@@ -21,7 +22,7 @@ def _build_attention_equation(rank, attention_axes):
     :return:
     """
     target_notation = _CHR_IDX[:rank]
-    batch_dims = tuple(np.delete(range(rank), attn_axes + (rank - 1,)))
+    batch_dims = tuple(np.delete(range(rank), attention_axes + (rank - 1,)))
     letter_offset = rank
     source_notation = ""
     for i in range(rank):
@@ -33,8 +34,8 @@ def _build_attention_equation(rank, attention_axes):
 
     product_notation = "".join(
         [target_notation[i] for i in batch_dims] +
-        [target_notation[i] for i in attn_axes] +
-        [source_notation[i] for i in attn_axes]
+        [target_notation[i] for i in attention_axes] +
+        [source_notation[i] for i in attention_axes]
     )
     dot_product_equation = "%s,%s->%s" % (
         source_notation, target_notation, product_notation
@@ -97,7 +98,7 @@ def _get_output_shape(output_rank, known_last_dims):
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
-    def __init__(self, num_heads, size_per_head, value_size=None, drop_rate=0.0, use_bias=True,
+    def __init__(self, num_heads, key_size, value_size=None, drop_rate=0.0, use_bias=True,
                  output_shape=None, attention_axes=None, return_attention_scores=False,
                  kernel_initializer='glorot_uniform', bias_initializer='zeros',
                  kernel_regularizer=None, bias_regularizer=None, activity_regularizer=None,
@@ -241,7 +242,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
             # output 的时候要把 num_heads 合并
             # 因此 bound_dims 设置为 2
             einsum_equation, bias_axes, output_rank = _build_projection_equation(
-                query_shape - 1, bound_dims=2, output_dims=len(output_shape)
+                query_shape.rank - 1, bound_dims=2, output_dims=len(output_shape)
             )
             self._output_dense = EinsumDense(
                 einsum_equation,
@@ -269,11 +270,25 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self._dropout_layer = tf.keras.layers.Dropout(rate=self._drop_rate)
 
     def compute_attention(self, query, key, value, attention_mask=None):
+        # do scale
+        # [batch_size, seq_len, num_heads, size_per_head]
         query = tf.multiply(query, 1.0 / math.sqrt(float(self._key_size)))
+
+        # dot-product
+        # [batch_size, num_heads, seq_len, seq_len]
         attention_scores = tf.einsum(self._dot_product_equation, key, query)
+
+        # mask
+        # [batch_size, num_heads, seq_len, seq_len]
         attention_scores = self._masked_softmax(attention_scores, attention_mask)
+
+        # dropout
         attention_scores_dropout = self._dropout_layer(attention_scores)
+
+        # combine heads
         attention_output = tf.einsum(self._combine_equation, attention_scores_dropout, value)
+
+        # return
         return attention_output, attention_scores
 
     def call(self, query, value, key=None, attention_mask=None):
@@ -292,13 +307,13 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         if key is None:
             key = value
 
-        # (batch_size, seq_len_q, num_heads, key_size)
+        # (batch_size, seq_len_q, num_heads, size_per_head)
         query = self._query_dense(query)
 
-        # (batch_size, seq_len_k, num_heads, key_size)
+        # (batch_size, seq_len_k, num_heads, size_per_head)
         key = self._key_dense(key)
 
-        # (batch_size, seq_len_v, num_heads, key_size)
+        # (batch_size, seq_len_v, num_heads, size_per_head)
         value = self._value_dense(value)
 
         attention_output, attention_scores = self.compute_attention(

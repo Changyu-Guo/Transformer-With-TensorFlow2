@@ -26,7 +26,7 @@ class EmbeddingShareWeights(tf.keras.layers.Layer):
                     mean=0, stddev=self.hidden_size ** -0.5
                 )
             )
-        super(EmbeddingShareWeights, self).build()
+        super(EmbeddingShareWeights, self).build(input_shape)
 
     def get_config(self):
         return {

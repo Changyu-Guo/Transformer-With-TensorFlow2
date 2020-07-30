@@ -41,3 +41,23 @@ class RelativePositionEmbedding(tf.keras.layers.Layer):
             )
         if inputs is not None:
             input_shape = utils.get_shape_list(inputs)
+            if length is not None and length != input_shape[1]:
+                raise ValueError(
+                    'If inputs is not None, length must equal to input_shape[1]'
+                )
+            length = input_shape[1]
+
+        position = tf.cast(tf.range(length), tf.float32)
+        num_timescales = self._hidden_size // 2
+        min_timescale, max_timescale = self._min_timescale, self._max_timescale
+        log_timescale_increment = (
+                math.log(float(max_timescale) / float(min_timescale)) /
+                (tf.cast(num_timescales, tf.float32) - 1))
+        inv_timescales = min_timescale * tf.exp(
+            tf.cast(tf.range(num_timescales), tf.float32) *
+            -log_timescale_increment)
+        scaled_time = tf.expand_dims(position, 1) * tf.expand_dims(inv_timescales,
+                                                                   0)
+        position_embeddings = tf.concat([tf.sin(scaled_time), tf.cos(scaled_time)],
+                                        axis=1)
+        return position_embeddings

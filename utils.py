@@ -5,7 +5,9 @@ from __future__ import division
 from __future__ import print_function
 
 import six
+import numpy as np
 import tensorflow as tf
+
 
 def get_shape_list(tensor, expected_rank=None, name=None):
     if expected_rank is not None:
@@ -43,16 +45,16 @@ def assert_rank(tensor, expected_rank, name=None):
         )
 
 
-def get_padding(x, padding_value=0, dtype=tf.float32):
-    with tf.name_scope('padding'):
-        return tf.cast(tf.equal(x, padding_value), dtype)
+def get_look_ahead_mask(length, dtype=tf.float32):
+    with tf.name_scope('look_ahead_mask'):
+        look_ahead_mask = 1 - tf.linalg.band_part(tf.ones([length, length], dtype=dtype), -1, 0)
+        return look_ahead_mask[tf.newaxis, tf.newaxis, :, :]
 
 
-def get_padding_bias(x, padding_value=0, dtype=tf.float32):
-    with tf.name_scope('attention_bias'):
-        padding = get_padding(x, padding_value, dtype)
-        attention_bias = padding * _NEG_INF_FP32
-        attention_bias = tf.expand_dims(
-            tf.expand_dims(attention_bias, axis=1), axis=1
+def get_attention_padding_mask(seqs, padding_value=0, dtype=tf.float32):
+    with tf.name_scope('attention_padding_mask'):
+        attention_padding_mask = tf.cast(tf.equal(seqs, padding_value), dtype)
+        attention_padding_mask = tf.expand_dims(
+            tf.expand_dims(attention_padding_mask, axis=1), axis=1
         )
-    return attention_bias
+    return attention_padding_mask

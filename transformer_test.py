@@ -8,26 +8,23 @@ import tensorflow as tf
 import model_params
 import transformer
 
+inputs = tf.random.uniform(shape=(2, 8), minval=0, maxval=41, dtype=tf.int64)
+targets = tf.random.uniform(shape=(2, 4), minval=0, maxval=41, dtype=tf.int64)
 
-class TransformerTest(tf.test.TestCase):
-    def setUp(self):
-        params = model_params.TINY_PARAMS
-        params['batch_size'] = 2
-        params['use_synthetic_data'] = True
-        params['hidden_size'] = 12
-        params['num_hidden_layers'] = 2
-        params['filter_size'] = 14
-        params['num_heads'] = 2
-        params['vocab_size'] = 41
-        params['extra_decode_length'] = 2
-        params['beam_size'] = 3
-        params['dtype'] = tf.float32
-        self.params = params
+params = model_params.TINY_PARAMS
+params["batch_size"] = params["default_batch_size"] = 2
+params["use_synthetic_data"] = True
+params["hidden_size"] = 12
+params["num_hidden_layers"] = 2
+params["filter_size"] = 14
+params["num_heads"] = 2
+params["vocab_size"] = 41
+params["extra_decode_length"] = 2
+params["beam_size"] = 3
+params["dtype"] = tf.float32
 
-    def test_create_model_and_train(self):
-        model = transformer.create_model(self.params, is_train=True)
-        inputs, outputs = model.inputs, model.outputs
-
-
-if __name__ == '__main__':
-    tf.test.main()
+model = transformer.create_model(params, is_train=True)
+model({
+    'inputs': inputs,
+    'targets': targets
+})
