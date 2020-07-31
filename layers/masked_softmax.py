@@ -19,15 +19,18 @@ class MaskedSoftmax(tf.keras.layers.Layer):
     def call(self, scores, mask=None):
         """
         :param scores: [batch_size, num_heads, seq_len, seq_len]
-        :param mask:
+        :param mask: [1, 1, seq_len, seq_len]
         :return:
         """
         if mask is not None:
             for _ in range(len(scores.shape) - len(mask.shape)):
                 mask = tf.expand_dims(mask, axis=self._mask_expansion_axes)
-            adder = (1.0 - tf.cast(mask, scores.dtype)) * -10000.0
+
+            # 被 mask 掉的部分为 1，将被 mask 掉的部分缩小，其他部分不变
+            adder = tf.cast(mask, scores.dtype) * -10000.0
             scores += adder
 
+        # softmax
         if len(self._normalization_axes) == 1:
             return tf.nn.softmax(scores, axis=self._normalization_axes[0])
         else:

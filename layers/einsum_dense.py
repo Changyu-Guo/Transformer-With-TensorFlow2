@@ -209,7 +209,7 @@ class EinsumDense(Layer):
 def _analyze_einsum_string(equation, bias_axes, input_shape, output_shape):
     """Analyzes an einsum string to determine the required weight shape."""
 
-    dot_replaced_string = re.sub(r"\.\.\.", "0", equation)
+    dot_replaced_string = re.sub(r"..", "0", equation)
 
     # This is the case where no ellipses are present in the string.
     split_string = re.match("([a-zA-Z]+),([a-zA-Z]+)->([a-zA-Z]+)",

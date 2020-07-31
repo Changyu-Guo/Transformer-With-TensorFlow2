@@ -5,20 +5,17 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import position_embedding
-import attention_layer
-import embedding_layer
-import feed_forward_net_layer
-import utils
+from layers import attention_layer, position_embedding, embedding_layer, feed_forward_net_layer, utils
 
 
 def create_model(params, is_train):
     with tf.name_scope('model'):
         if is_train:
-            # [batch_size, seq_len] -> [None, None]
+
+            # [batch_size, inputs_seq_len]
             inputs = tf.keras.layers.Input((None,), dtype='int64', name='inputs')
 
-            # [batch_size, seq_len] -> [None, None]
+            # [batch_size, targets_seq_len]
             targets = tf.keras.layers.Input((None,), dtype='int64', name='targets')
 
             # model
@@ -32,7 +29,8 @@ def create_model(params, is_train):
             return model
 
         else:
-            # [batch_size, seq_len]
+
+            # [batch_size, inputs_seq_len]
             inputs = tf.keras.layers.Input((None,), dtype=tf.int64, name='inputs')
 
             # model
@@ -129,11 +127,16 @@ class Transformer(tf.keras.Model):
             embedded_inputs = tf.cast(embedded_inputs, self.params['dtype'])
 
             # convert data type
+            # [batch_size, 1, 1, seq_len]
             inputs_padding_mask = tf.cast(inputs_padding_mask, self.params['dtype'])
 
             with tf.name_scope('add_pos_encoding'):
+                # [seq_len, hidden_size]
                 pos_encoding = self.position_embedding(inputs=embedded_inputs)
                 pos_encoding = tf.cast(pos_encoding, self.params['dtype'])
+
+                # pos_encoding 会广播到每个 batch
+                # [batch_size, seq_len, hidden_size]
                 encoder_inputs = embedded_inputs + pos_encoding
 
             if training:

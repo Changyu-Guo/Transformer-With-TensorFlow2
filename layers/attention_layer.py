@@ -9,8 +9,8 @@ import string
 import collections
 import numpy as np
 import tensorflow as tf
-from einsum_dense import EinsumDense
-import masked_softmax
+from layers.einsum_dense import EinsumDense
+from layers import masked_softmax
 
 _CHR_IDX = string.ascii_lowercase
 
@@ -278,14 +278,14 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         # [batch_size, num_heads, seq_len, seq_len]
         attention_scores = tf.einsum(self._dot_product_equation, key, query)
 
-        # mask
+        # mask and softmax
         # [batch_size, num_heads, seq_len, seq_len]
         attention_scores = self._masked_softmax(attention_scores, attention_mask)
 
         # dropout
         attention_scores_dropout = self._dropout_layer(attention_scores)
 
-        # combine heads
+        # combine heads and multi value
         attention_output = tf.einsum(self._combine_equation, attention_scores_dropout, value)
 
         # return

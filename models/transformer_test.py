@@ -5,8 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import model_params
-import transformer
+from models import transformer, model_params
 
 inputs = tf.random.uniform(shape=(2, 8), minval=0, maxval=41, dtype=tf.int64)
 targets = tf.random.uniform(shape=(2, 4), minval=0, maxval=41, dtype=tf.int64)
@@ -28,3 +27,4 @@ model({
     'inputs': inputs,
     'targets': targets
 })
+
