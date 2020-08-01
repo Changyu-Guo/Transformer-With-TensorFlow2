@@ -10,7 +10,8 @@ import collections
 import numpy as np
 import tensorflow as tf
 from layers.einsum_dense import EinsumDense
-from layers import masked_softmax
+from layers import masked_softmax_layers
+from layers import utils
 
 _CHR_IDX = string.ascii_lowercase
 
@@ -264,7 +265,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         norm_axes = tuple(
             range(attention_scores_rank - len(self._attention_axes), attention_scores_rank)
         )
-        self._masked_softmax = masked_softmax.MaskedSoftmax(
+        self._masked_softmax = masked_softmax_layers.MaskedSoftmax(
             mask_expansion_axes=[1], normalization_axes=norm_axes
         )
         self._dropout_layer = tf.keras.layers.Dropout(rate=self._drop_rate)
@@ -324,3 +325,41 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         if self._return_attention_scores:
             return attention_output, attention_scores
         return attention_output
+
+
+class TalkingHeadsAttention(MultiHeadAttention):
+    pass
+
+
+class VotingAttention(tf.keras.layers.Layer):
+    def __init__(self):
+        pass
+
+
+class MultiChannelAttention(MultiHeadAttention):
+    def __init__(self):
+        pass
+
+
+class SelfAttentionMask(tf.keras.layers.Layer):
+    def call(self, inputs):
+        from_tensor = inputs[0]
+        to_mask = inputs[1]
+        from_shape = utils.get_shape_list(from_tensor, expected_rank=[2, 3])
+        batch_size = from_shape[0]
+        from_seq_len = from_shape[1]
+
+        to_shape = utils.get_shape_list(to_mask, expected_rank=2)
+        to_seq_len = to_shape[1]
+
+        to_mask = tf.cast(
+            tf.reshape(to_mask, [batch_size, 1, to_seq_len]),
+            dtype=from_tensor.dtype
+        )
+        broadcast_ones = tf.ones(
+            shape=[batch_size, from_seq_len, 1],
+            dtype=from_tensor.dtype
+        )
+        mask = broadcast_ones * to_mask
+
+        return mask

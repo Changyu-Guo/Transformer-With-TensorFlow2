@@ -5,7 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from layers import attention_layer, position_embedding, embedding_layer, feed_forward_net_layer, utils
+from layers import attention_layers, position_embedding, embedding_layers, feed_forward_net_layers, utils
 
 
 def create_model(params, is_train):
@@ -54,7 +54,7 @@ class Transformer(tf.keras.Model):
         self.params = params
 
         # 使用参数初始化各层
-        self.embedding_softmax_layer = embedding_layer.EmbeddingShareWeights(
+        self.embedding_softmax_layer = embedding_layers.WordEmbeddingShareWeights(
             params['vocab_size'], params['hidden_size']
         )
         self.position_embedding = position_embedding.RelativePositionEmbedding(
@@ -237,12 +237,12 @@ class EncoderStack(tf.keras.layers.Layer):
     def build(self, input_shape):
         params = self.params
         for _ in range(params['num_hidden_layers']):
-            self_attention = attention_layer.MultiHeadAttention(
+            self_attention = attention_layers.MultiHeadAttention(
                 num_heads=params['num_heads'],
                 key_size=params['hidden_size'],
                 drop_rate=params['attention_dropout']
             )
-            feed_forward_net = feed_forward_net_layer.FeedForwardNetwork(
+            feed_forward_net = feed_forward_net_layers.FeedForwardNetwork(
                 filter_size=params['filter_size'],
                 hidden_size=params['hidden_size'],
                 drop_rate=params['relu_dropout']
@@ -300,17 +300,17 @@ class DecoderStack(tf.keras.layers.Layer):
     def build(self, input_shape):
         params = self.params
         for _ in range(params['num_hidden_layers']):
-            self_attention = attention_layer.MultiHeadAttention(
+            self_attention = attention_layers.MultiHeadAttention(
                 num_heads=params['num_heads'],
                 key_size=params['hidden_size'],
                 drop_rate=params['attention_dropout']
             )
-            encoder_decoder_attention = attention_layer.MultiHeadAttention(
+            encoder_decoder_attention = attention_layers.MultiHeadAttention(
                 num_heads=params['num_heads'],
                 key_size=params['hidden_size'],
                 drop_rate=params['attention_dropout']
             )
-            feed_forward_net = feed_forward_net_layer.FeedForwardNetwork(
+            feed_forward_net = feed_forward_net_layers.FeedForwardNetwork(
                 filter_size=params['filter_size'],
                 hidden_size=params['hidden_size'],
                 drop_rate=params['relu_dropout']
