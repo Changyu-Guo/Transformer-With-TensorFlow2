@@ -10,6 +10,7 @@ import tensorflow as tf
 class MaskedSoftmax(tf.keras.layers.Layer):
     def __init__(self, mask_expansion_axes=None, normalization_axes=None, **kwargs):
         self._mask_expansion_axes = mask_expansion_axes
+        # 默认只标准化最后一层
         if normalization_axes is None:
             self._normalization_axes = (-1,)
         else:
@@ -26,8 +27,10 @@ class MaskedSoftmax(tf.keras.layers.Layer):
             for _ in range(len(scores.shape) - len(mask.shape)):
                 mask = tf.expand_dims(mask, axis=self._mask_expansion_axes)
 
-            # 被 mask 掉的部分为 1，将被 mask 掉的部分缩小，其他部分不变
-            adder = tf.cast(mask, scores.dtype) * -10000.0
+            # 1 代表没有被 mask
+            # 0 代表被 mask
+            # 将 mask 的部分，即值为 0 的部分变为非常大的负数
+            adder = (1.0 - tf.cast(mask, scores.dtype)) * -10000.0
             scores += adder
 
         # softmax

@@ -34,80 +34,80 @@ from tensorflow.python.util.tf_export import keras_export
 class EinsumDense(Layer):
     """A layer that uses tf.einsum as the backing computation.
 
-    This layer can perform einsum calculations of arbitrary dimensionality.
+  This layer can perform einsum calculations of arbitrary dimensionality.
 
-    Arguments:
-      equation: An equation describing the einsum to perform. This equation must
-        be a valid einsum string of the form `ab,bc->ac`, `...ab,bc->...ac`, or
-        `ab...,bc->ac...` where 'ab', 'bc', and 'ac' can be any valid einsum axis
-        expression sequence.
-      output_shape: The expected shape of the output tensor (excluding the batch
-        dimension and any dimensions represented by ellipses). You can specify
-        None for any dimension that is unknown or can be inferred from the input
-        shape.
-      activation: Activation function to use. If you don't specify anything, no
-        activation is applied (that is, a "linear" activation: `a(x) = x`).
-      bias_axes: A string containing the output dimension(s) to apply a bias to.
-        Each character in the `bias_axes` string should correspond to a character
-        in the output portion of the `equation` string.
-      kernel_initializer: Initializer for the `kernel` weights matrix.
-      bias_initializer: Initializer for the bias vector.
-      kernel_regularizer: Regularizer function applied to the `kernel` weights
-        matrix.
-      bias_regularizer: Regularizer function applied to the bias vector.
-      activity_regularizer: Regularizer function applied to the output of the
-        layer (its "activation")..
-      kernel_constraint: Constraint function applied to the `kernel` weights
-        matrix.
-      bias_constraint: Constraint function applied to the bias vector.
+  Arguments:
+    equation: An equation describing the einsum to perform. This equation must
+      be a valid einsum string of the form `ab,bc->ac`, `...ab,bc->...ac`, or
+      `ab...,bc->ac...` where 'ab', 'bc', and 'ac' can be any valid einsum axis
+      expression sequence.
+    output_shape: The expected shape of the output tensor (excluding the batch
+      dimension and any dimensions represented by ellipses). You can specify
+      None for any dimension that is unknown or can be inferred from the input
+      shape.
+    activation: Activation function to use. If you don't specify anything, no
+      activation is applied (that is, a "linear" activation: `a(x) = x`).
+    bias_axes: A string containing the output dimension(s) to apply a bias to.
+      Each character in the `bias_axes` string should correspond to a character
+      in the output portion of the `equation` string.
+    kernel_initializer: Initializer for the `kernel` weights matrix.
+    bias_initializer: Initializer for the bias vector.
+    kernel_regularizer: Regularizer function applied to the `kernel` weights
+      matrix.
+    bias_regularizer: Regularizer function applied to the bias vector.
+    activity_regularizer: Regularizer function applied to the output of the
+      layer (its "activation")..
+    kernel_constraint: Constraint function applied to the `kernel` weights
+      matrix.
+    bias_constraint: Constraint function applied to the bias vector.
 
-    Examples:
+  Examples:
 
-    **Biased dense layer with einsums**
+  **Biased dense layer with einsums**
 
-    This example shows how to instantiate a standard Keras dense layer using
-    einsum operations. This example is equivalent to
-    `tf.keras.layers.Dense(64, use_bias=True)`.
+  This example shows how to instantiate a standard Keras dense layer using
+  einsum operations. This example is equivalent to
+  `tf.keras.layers.Dense(64, use_bias=True)`.
 
-    >>> layer = EinsumDense("ab,bc->ac", output_shape=64, bias_axes="c")
-    >>> input_tensor = tf.keras.Input(shape=[32])
-    >>> output_tensor = layer(input_tensor)
-    >>> output_tensor
-    <tf.Tensor '...' shape=(None, 64) dtype=...>
+  >>> layer = EinsumDense("ab,bc->ac", output_shape=64, bias_axes="c")
+  >>> input_tensor = tf.keras.Input(shape=[32])
+  >>> output_tensor = layer(input_tensor)
+  >>> output_tensor
+  <tf.Tensor '...' shape=(None, 64) dtype=...>
 
-    **Applying a dense layer to a sequence**
+  **Applying a dense layer to a sequence**
 
-    This example shows how to instantiate a layer that applies the same dense
-    operation to every element in a sequence. Here, the 'output_shape' has two
-    values (since there are two non-batch dimensions in the output); the first
-    dimension in the output_shape is `None`, because the sequence dimension `b`
-    has an unknown shape.
+  This example shows how to instantiate a layer that applies the same dense
+  operation to every element in a sequence. Here, the 'output_shape' has two
+  values (since there are two non-batch dimensions in the output); the first
+  dimension in the output_shape is `None`, because the sequence dimension `b`
+  has an unknown shape.
 
-    >>> layer = EinsumDense("abc,cd->abd",
-    ...                     output_shape=(None, 64),
-    ...                     bias_axes="d")
-    >>> input_tensor = tf.keras.Input(shape=[32, 128])
-    >>> output_tensor = layer(input_tensor)
-    >>> output_tensor
-    <tf.Tensor '...' shape=(None, 32, 64) dtype=...>
+  >>> layer = EinsumDense("abc,cd->abd",
+  ...                     output_shape=(None, 64),
+  ...                     bias_axes="d")
+  >>> input_tensor = tf.keras.Input(shape=[32, 128])
+  >>> output_tensor = layer(input_tensor)
+  >>> output_tensor
+  <tf.Tensor '...' shape=(None, 32, 64) dtype=...>
 
-    **Applying a dense layer to a sequence using ellipses**
+  **Applying a dense layer to a sequence using ellipses**
 
-    This example shows how to instantiate a layer that applies the same dense
-    operation to every element in a sequence, but uses the ellipsis notation
-    instead of specifying the batch and sequence dimensions.
+  This example shows how to instantiate a layer that applies the same dense
+  operation to every element in a sequence, but uses the ellipsis notation
+  instead of specifying the batch and sequence dimensions.
 
-    Because we are using ellipsis notation and have specified only one axis, the
-    output_shape arg is a single value. When instantiated in this way, the layer
-    can handle any number of sequence dimensions - including the case where no
-    sequence dimension exists.
+  Because we are using ellipsis notation and have specified only one axis, the
+  output_shape arg is a single value. When instantiated in this way, the layer
+  can handle any number of sequence dimensions - including the case where no
+  sequence dimension exists.
 
-    >>> layer = EinsumDense("...x,xy->...y", output_shape=64, bias_axes="y")
-    >>> input_tensor = tf.keras.Input(shape=[32, 128])
-    >>> output_tensor = layer(input_tensor)
-    >>> output_tensor
-    <tf.Tensor '...' shape=(None, 32, 64) dtype=...>
-    """
+  >>> layer = EinsumDense("...x,xy->...y", output_shape=64, bias_axes="y")
+  >>> input_tensor = tf.keras.Input(shape=[32, 128])
+  >>> output_tensor = layer(input_tensor)
+  >>> output_tensor
+  <tf.Tensor '...' shape=(None, 32, 64) dtype=...>
+  """
 
     def __init__(self,
                  equation,
@@ -209,7 +209,7 @@ class EinsumDense(Layer):
 def _analyze_einsum_string(equation, bias_axes, input_shape, output_shape):
     """Analyzes an einsum string to determine the required weight shape."""
 
-    dot_replaced_string = re.sub(r"\.\.", "0", equation)
+    dot_replaced_string = re.sub(r"\.\.\.", "0", equation)
 
     # This is the case where no ellipses are present in the string.
     split_string = re.match("([a-zA-Z]+),([a-zA-Z]+)->([a-zA-Z]+)",

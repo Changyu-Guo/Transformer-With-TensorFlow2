@@ -9,42 +9,64 @@ import string
 import collections
 import numpy as np
 import tensorflow as tf
-from layers.einsum_dense import EinsumDense
-from layers import masked_softmax_layers
-from layers import utils
+from layers.attention_layers.einsum_dense import EinsumDense
+from layers.attention_layers import masked_softmax_layer
 
 _CHR_IDX = string.ascii_lowercase
 
 
 def _build_attention_equation(rank, attention_axes):
     """
-    :param rank:
+    :param rank: 4
     :param attention_axes:
     :return:
     """
-    target_notation = _CHR_IDX[:rank]
+    # Query 矩阵维度 (abcd)
+    query_notation = _CHR_IDX[:rank]
+    # num_heads 也算是 batch dims (在运算过程中可以随意变换位置)
     batch_dims = tuple(np.delete(range(rank), attention_axes + (rank - 1,)))
     letter_offset = rank
-    source_notation = ""
+
+    # Key or Value 矩阵维度
+    # Key or Value 矩阵和 Query 矩阵在 batch dims 上保持一致
+    # 另外，Key 矩阵最后一维和 Query 矩阵相同 (即 hidden_size 相同)
+    key_or_value_notation = ""
     for i in range(rank):
         if i in batch_dims or i == rank - 1:
-            source_notation += target_notation[i]
+            key_or_value_notation += query_notation[i]
         else:
-            source_notation += _CHR_IDX[letter_offset]
+            key_or_value_notation += _CHR_IDX[letter_offset]
             letter_offset += 1
 
     product_notation = "".join(
-        [target_notation[i] for i in batch_dims] +
-        [target_notation[i] for i in attention_axes] +
-        [source_notation[i] for i in attention_axes]
+        # dot-product 之后 batch_size 和 num_heads 变换到了前面
+        # 所有在这里先添加 Query 矩阵的 batch dims
+        [query_notation[i] for i in batch_dims] +
+
+        # 添加 Query 矩阵的 attention axes
+        [query_notation[i] for i in attention_axes] +
+
+        # 添加 Key 矩阵的 attention axes
+        [key_or_value_notation[i] for i in attention_axes]
     )
+
+    # Query * Key: abcd,aecd->acbe
     dot_product_equation = "%s,%s->%s" % (
-        source_notation, target_notation, product_notation
+        query_notation, key_or_value_notation, product_notation
     )
+
     attn_scores_rank = len(product_notation)
+
+    # 乘以 Value 矩阵，变回 Query 维度
+    # 1. num_heads 变换回倒数第二维度
+    # 2. seq_len 变为 Query 的第二维度
+    # 3. hidden_size 变为 Value 的 hidden_size
+    # 4. batch_size 保持不变
+    # acbe,aecd->abcd
     combine_equation = "%s,%s->%s" % (
-        product_notation, source_notation, target_notation
+        product_notation, key_or_value_notation, query_notation
     )
+
     return dot_product_equation, combine_equation, attn_scores_rank
 
 
@@ -99,34 +121,31 @@ def _get_output_shape(output_rank, known_last_dims):
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
-    def __init__(self, num_heads, key_size, value_size=None, drop_rate=0.0, use_bias=True,
-                 output_shape=None, attention_axes=None, return_attention_scores=False,
-                 kernel_initializer='glorot_uniform', bias_initializer='zeros',
-                 kernel_regularizer=None, bias_regularizer=None, activity_regularizer=None,
-                 kernel_constraint=None, bias_constraint=None, **kwargs):
-        """
-        :param num_heads: 多头注意力机制中头的个数
-        :param key_size: query 和 key 每个 head 的 hidden_size
-        :param value_size: value 每个 head 的 hidden_size
-        :param drop_rate: dropout 层的丢弃率
-        :param use_bias: 是否使用 bias
-        :param output_shape: 输出维度
-        :param attention_axes: 在哪个轴做 attention
-        :param return_attention_scores: 是否返回 attention 得分
-        :param kernel_initializer: kernel (or weights) 的初始化方法，默认是 Glorot (or Xavier)
-        :param bias_initializer: bias 的初始化方法，默认是全 0
-        :param kernel_regularizer: 对 weights 正则化方法
-        :param bias_regularizer: 对 bias 的正则化方法
-        :param activity_regularizer: 激活函数，在 Attention 中并不会用到激活函数、bias、以及正则化方法
-        :param kernel_constraint: 对 weights 的约束
-        :param bias_constraint: 对 bias 的约束
-        :param kwargs:
-        """
+    def __init__(
+            self,
+            num_attention_heads,
+            size_per_head_for_query_and_key,
+            size_per_head_for_value=None,
+            attention_dropout_rate=0.0,
+            use_bias=True,
+            output_shape=None,
+            attention_axes=None,
+            return_attention_scores=False,
+            kernel_initializer='glorot_uniform',
+            bias_initializer='zeros',
+            kernel_regularizer=None,
+            bias_regularizer=None,
+            activity_regularizer=None,
+            kernel_constraint=None,
+            bias_constraint=None,
+            **kwargs
+    ):
         super(MultiHeadAttention, self).__init__(**kwargs)
-        self._num_heads = num_heads
-        self._key_size = key_size
-        self._value_size = value_size if value_size else key_size
-        self._drop_rate = drop_rate
+        self._num_attention_heads = num_attention_heads
+        self._size_per_head_for_query_and_key = size_per_head_for_query_and_key
+        self._size_per_head_for_value = size_per_head_for_value if size_per_head_for_value else \
+            size_per_head_for_query_and_key
+        self._attention_dropout_rate = attention_dropout_rate
         self._use_bias = use_bias
         self._output_shape = output_shape
         self._return_attention_scores = return_attention_scores
@@ -147,7 +166,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         """
         :param query: query Tensor or TensorShape
         :param value: value Tensor or TensorShape
-        :param key: key Tensor or TensorShape
+        :param key: key Tensor or TensorShape or None
         :return:
         """
         self._built_from_signature = True
@@ -192,7 +211,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                 einsum_equation,
                 output_shape=_get_output_shape(
                     output_rank - 1,  # -1 是因为 batch_size
-                    [self._num_heads, self._key_size]
+                    [self._num_attention_heads, self._size_per_head_for_query_and_key]
                 ),
                 bias_axes=bias_axes if self._use_bias else None,
                 name='query',
@@ -207,7 +226,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                 einsum_equation,
                 output_shape=_get_output_shape(
                     output_rank - 1,
-                    [self._num_heads, self._key_size]
+                    [self._num_attention_heads, self._size_per_head_for_query_and_key]
                 ),
                 bias_axes=bias_axes if self._use_bias else None,
                 name="key",
@@ -224,13 +243,15 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                 einsum_equation,
                 output_shape=_get_output_shape(
                     output_rank - 1,
-                    [self._num_heads, self._value_size]
+                    [self._num_attention_heads, self._size_per_head_for_value]
                 ),
                 bias_axes=bias_axes if self._use_bias else None,
                 name="value",
                 **common_kwargs
             )
+
             self.build_attention(output_rank)
+
             if self._output_shape:
                 if not isinstance(self._output_shape, collections.abc.Sized):
                     output_shape = [self._output_shape]
@@ -255,6 +276,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
     def build_attention(self, rank):
         if self._attention_axes is None:
+            # 第一个维度是 batch_size
+            # 最后两个维度是 num_heads 和 hidden_size
+            # 只有 seq_len 是做 attention 维度
             self._attention_axes = tuple(range(1, rank - 2))
         else:
             self._attention_axes = tuple(self._attention_axes)
@@ -265,19 +289,19 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         norm_axes = tuple(
             range(attention_scores_rank - len(self._attention_axes), attention_scores_rank)
         )
-        self._masked_softmax = masked_softmax_layers.MaskedSoftmax(
+        self._masked_softmax = masked_softmax_layer.MaskedSoftmax(
             mask_expansion_axes=[1], normalization_axes=norm_axes
         )
-        self._dropout_layer = tf.keras.layers.Dropout(rate=self._drop_rate)
+        self._dropout_layer = tf.keras.layers.Dropout(rate=self._attention_dropout_rate)
 
     def compute_attention(self, query, key, value, attention_mask=None):
         # do scale
         # [batch_size, seq_len, num_heads, size_per_head]
-        query = tf.multiply(query, 1.0 / math.sqrt(float(self._key_size)))
+        query = tf.multiply(query, 1.0 / math.sqrt(float(self._size_per_head_for_query_and_key)))
 
         # dot-product
         # [batch_size, num_heads, seq_len, seq_len]
-        attention_scores = tf.einsum(self._dot_product_equation, key, query)
+        attention_scores = tf.einsum(self._dot_product_equation, query, key)
 
         # mask and softmax
         # [batch_size, num_heads, seq_len, seq_len]
@@ -294,11 +318,11 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
     def call(self, query, value, key=None, attention_mask=None):
         """
-        :param query: [None, seq_len_q, hidden_size]
-        :param value: [None, seq_len_v, hidden_size]
-        :param key: [None, seq_len_k, hidden_size] if not given, will use value
-        :param attention_mask: [None, seq_len_q, seq_len_v]
-        :return: [None, seq_len_q, hidden_size]
+        :param query: (batch_size, seq_len_q, hidden_size_q)
+        :param value: (batch_size, seq_len_v, hidden_size_v)
+        :param key: (batch_size, seq_len_k, hidden_size_k) if not given, will use value
+        :param attention_mask: (batch_size, seq_len_q, seq_len_v)
+        :return: [batch_size, seq_len_q, output_shape]
         """
         # 为了加快运算速度，这里使用了自定义的运算
         # 而不是使用的默认的 dot-product 例如 tf.matmul()
@@ -308,13 +332,13 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         if key is None:
             key = value
 
-        # (batch_size, seq_len_q, num_heads, size_per_head)
+        # (batch_size, seq_len_q, num_heads, size_per_head_for_query_and_key)
         query = self._query_dense(query)
 
-        # (batch_size, seq_len_k, num_heads, size_per_head)
+        # (batch_size, seq_len_k, num_heads, size_per_head_for_query_and_key)
         key = self._key_dense(key)
 
-        # (batch_size, seq_len_v, num_heads, size_per_head)
+        # (batch_size, seq_len_v, num_heads, size_per_head_for_value)
         value = self._value_dense(value)
 
         attention_output, attention_scores = self.compute_attention(
@@ -325,41 +349,3 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         if self._return_attention_scores:
             return attention_output, attention_scores
         return attention_output
-
-
-class TalkingHeadsAttention(MultiHeadAttention):
-    pass
-
-
-class VotingAttention(tf.keras.layers.Layer):
-    def __init__(self):
-        pass
-
-
-class MultiChannelAttention(MultiHeadAttention):
-    def __init__(self):
-        pass
-
-
-class SelfAttentionMask(tf.keras.layers.Layer):
-    def call(self, inputs):
-        from_tensor = inputs[0]
-        to_mask = inputs[1]
-        from_shape = utils.get_shape_list(from_tensor, expected_rank=[2, 3])
-        batch_size = from_shape[0]
-        from_seq_len = from_shape[1]
-
-        to_shape = utils.get_shape_list(to_mask, expected_rank=2)
-        to_seq_len = to_shape[1]
-
-        to_mask = tf.cast(
-            tf.reshape(to_mask, [batch_size, 1, to_seq_len]),
-            dtype=from_tensor.dtype
-        )
-        broadcast_ones = tf.ones(
-            shape=[batch_size, from_seq_len, 1],
-            dtype=from_tensor.dtype
-        )
-        mask = broadcast_ones * to_mask
-
-        return mask

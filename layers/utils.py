@@ -36,7 +36,7 @@ def assert_rank(tensor, expected_rank, name=None):
         for x in expected_rank:
             expected_rank_dict[x] = True
 
-    actual_rank = tensor.shape.dims
+    actual_rank = tensor.shape.ndims
     if actual_rank not in expected_rank_dict:
         raise ValueError(
             "For the tensor `%s`, the actual tensor rank `%d` (shape = %s) is not "

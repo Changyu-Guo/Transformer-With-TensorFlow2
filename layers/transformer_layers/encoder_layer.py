@@ -6,37 +6,17 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from layers import attention_layers
-from layers import einsum_dense
+from layers.attention_layers.multi_head_attention_layer import MultiHeadAttention
+from layers.attention_layers.einsum_dense import EinsumDense
 
 
 class TransformerEncoderLayer(tf.keras.layers.Layer):
-    """Transformer Encoder Layer
-
-    参数：
-        num_heads: attention head 数目
-        filter_size: feed forward network 隐含层维度
-        filter_activation: feed forward network 隐含层激活函数
-        dropout_rate: attention 外的 dropout 的 drop rate
-        attention_dropout_rate: attention 内部的 drop rate
-        output_range:
-        kernel_initializer: 所有 weights 的初始化方法
-        bias_initializer: 所有 bias 的初始化方法
-        kernel_regularizer: 所有 weights 的正则化方法
-        bias_regularizer: 所有 bias 的正则化方法
-        activity_regularizer:
-        kernel_constraint: 所有 weights 的约束
-        bias_constraint: 所有 bias 的约束
-        use_bias: 在 attention layer, 使用使用 bias
-        norm_first: 是否在 attention 和 feed forward net 之前进行 layer norm
-        norm_epsilon: layer norm 的参数
-    """
     def __init__(
             self,
-            num_heads,
-            filter_size,
-            filter_activation,
-            dropout_rate=0.0,
+            num_attention_heads,
+            intermediate_size,
+            intermediate_activation,
+            hidden_dropout_rate=0.0,
             attention_dropout_rate=0.0,
             output_range=None,
             kernel_initializer='glorot_uniform',
@@ -53,10 +33,10 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
     ):
         super(TransformerEncoderLayer, self).__init__(**kwargs)
 
-        self._num_heads = num_heads
-        self._filter_size = filter_size
-        self._filter_activation = filter_activation
-        self._filter_dropout_rate = dropout_rate
+        self._num_attention_heads = num_attention_heads
+        self._intermediate_size = intermediate_size
+        self._intermediate_activation = intermediate_activation
+        self._hidden_dropout_rate = hidden_dropout_rate
         self._attention_dropout_rate = attention_dropout_rate
         self._output_range = output_range
         self._kernel_initializer = kernel_initializer
@@ -102,13 +82,13 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
                 )
 
         # 对 size per head 进行计算
-        if hidden_size % self._num_heads != 0:
+        if hidden_size % self._num_attention_heads != 0:
             raise ValueError(
                 'The input size (%d) is not a multiple of the number of attention '
-                'heads (%d)' % (hidden_size, self._num_heads)
+                'heads (%d)' % (hidden_size, self._num_attention_heads)
             )
 
-        self._size_per_head = int(hidden_size // self._num_heads)
+        self._size_per_head = int(hidden_size // self._num_attention_heads)
 
         # 构建通用参数
         common_kwargs = dict(
@@ -116,16 +96,16 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             bias_initializer=self._bias_initializer,
             kernel_regularizer=self._kernel_regularizer,
             bias_regularizer=self._bias_regularizer,
+            activity_regularizer=self._activity_regularizer,
             kernel_constraint=self._kernel_constraint,
-            bias_constraint=self._bias_constraint,
-            filter_activation=self._filter_activation
+            bias_constraint=self._bias_constraint
         )
 
         # attention layer
-        self._attention_layer = attention_layers.MultiHeadAttention(
-            num_heads=self._num_heads,
-            key_size=self._size_per_head,
-            drop_rate=self._attention_dropout_rate,
+        self._attention_layer = MultiHeadAttention(
+            num_attention_heads=self._num_attention_heads,
+            size_per_head_for_query_and_key=self._size_per_head,
+            attention_dropout_rate=self._attention_dropout_rate,
             use_bias=self._use_bias,
             name='self_attention',
             **common_kwargs
@@ -144,21 +124,21 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         )
 
         # 全连接神经网络
-        self._filter_dense = einsum_dense.EinsumDense(
+        self._intermediate_dense = EinsumDense(
             'abc,cd->abd',
-            output_shape=(None, self._filter_size),
+            output_shape=(None, self._intermediate_size),
             bias_axes='d',
             name='feed_forward_net',
             **common_kwargs
         )
         # 全连接神经网络的激活函数
-        self._filter_dense_activation = tf.keras.layers.Activation(
-            self._filter_activation
+        self._intermediate_dense_activation = tf.keras.layers.Activation(
+            self._intermediate_activation
         )
 
         # 输出
         # (全连接神经网络被拆分为了 filter_dense 和 output_dense)
-        self._output_dense = einsum_dense.EinsumDense(
+        self._output_dense = EinsumDense(
             'abc,cd->abd',
             output_shape=(None, hidden_size),
             bias_axes='d',
@@ -210,8 +190,8 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             source_attention_output = attention_output
             attention_output = self._output_layer_norm(attention_output)
 
-        feed_forward_net_output = self._filter_dense(attention_output)
-        feed_forward_net_output = self._filter_dense(feed_forward_net_output)
+        feed_forward_net_output = self._intermediate_dense(attention_output)
+        feed_forward_net_output = self._intermediate_dense_activation(feed_forward_net_output)
 
         layer_output = self._output_dense(feed_forward_net_output)
         layer_output = self._output_dropout(layer_output)
@@ -223,56 +203,3 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             layer_output = self._output_layer_norm(layer_output + attention_output)
 
         return layer_output
-
-
-class TransformerDecoderLayer(tf.keras.layers.Layer):
-    def __init__(
-            self,
-            num_heads,
-            filter_size,
-            filter_activation,
-            dropout_rate=0.0,
-            attention_dropout_rate=0.0,
-            multi_channel_cross_attention=False,
-            kernel_initializer="glorot_uniform",
-            bias_initializer="zeros",
-            kernel_regularizer=None,
-            bias_regularizer=None,
-            activity_regularizer=None,
-            kernel_constraint=None,
-            bias_constraint=None,
-            use_bias=True,
-            norm_first=False,
-            norm_epsilon=1e-12,
-            **kwargs
-    ):
-        super(TransformerDecoderLayer, self).__init__(**kwargs)
-        self._num_heads = num_heads
-        self._filter_size = filter_size
-        self._filter_activation = tf.keras.activations.get(
-            filter_activation)
-        self._dropout_rate = dropout_rate
-        self._attention_dropout_rate = attention_dropout_rate
-        self._multi_channel_cross_attention = multi_channel_cross_attention
-        self._kernel_initializer = tf.keras.initializers.get(kernel_initializer)
-        self._bias_initializer = tf.keras.initializers.get(bias_initializer)
-        self._kernel_regularizer = tf.keras.regularizers.get(kernel_regularizer)
-        self._bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
-        self._activity_regularizer = tf.keras.regularizers.get(activity_regularizer)
-        self._kernel_constraint = tf.keras.constraints.get(kernel_constraint)
-        self._bias_constraint = tf.keras.constraints.get(bias_constraint)
-        self._use_bias = use_bias
-        self._norm_first = norm_first
-        self._norm_epsilon = norm_epsilon
-        if self._multi_channel_cross_attention:
-            self._cross_attention_cls = None
-        else:
-            self._cross_attention_cls = attention_layers.MultiHeadAttention
-
-    def build(self, input_shape):
-        target_tensor_shape = input_shape[0]
-        if len(target_tensor_shape) != 3:
-            raise ValueError(
-                ''
-            )
-

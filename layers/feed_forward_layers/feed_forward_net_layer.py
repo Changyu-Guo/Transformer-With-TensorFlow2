@@ -8,15 +8,15 @@ import tensorflow as tf
 
 
 class FeedForwardNetwork(tf.keras.layers.Layer):
-    def __init__(self, filter_size, hidden_size, drop_rate):
+    def __init__(self, intermediate_size, hidden_size, hidden_dropout_rate):
         super(FeedForwardNetwork, self).__init__()
-        self.filter_size = filter_size
+        self.intermediate_size = intermediate_size
         self.hidden_size = hidden_size
-        self.drop_rate = drop_rate
+        self.hidden_dropout_rate = hidden_dropout_rate
 
     def build(self, input_shape):
-        self.filter_dense_layer = tf.keras.layers.Dense(
-            self.filter_size,
+        self._intermediate_dense_layer = tf.keras.layers.Dense(
+            self.intermediate_size,
             use_bias=True,
             activation=tf.nn.relu,
             name='hidden_layer'
@@ -30,14 +30,14 @@ class FeedForwardNetwork(tf.keras.layers.Layer):
 
     def get_config(self):
         return {
+            'intermediate_size': self.intermediate_size,
             'hidden_size': self.hidden_size,
-            'output_size': self.output_size,
-            'drop_rate': self.drop_rate
+            'hidden_dropout_rate': self.hidden_dropout_rate
         }
 
     def call(self, x, training):
-        hidden = self.filter_dense_layer(x)
+        hidden = self._intermediate_dense_layer(x)
         if training:
-            hidden = tf.nn.dropout(hidden, rate=self.drop_rate)
+            hidden = tf.nn.dropout(hidden, rate=self.hidden_dropout_rate)
         output = self.output_dense_layer(hidden)
         return output

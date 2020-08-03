@@ -1,0 +1,38 @@
+common:（不管什么层都应该使用该命名，与 Keras 某些函数接受的参数名保持一致）
+权重矩阵的初始化方法：kernel_initializer='glorot_uniform'
+偏置矩阵的初始化方法：bias_initializer='zeros'
+权重矩阵的正则化方法：kernel_regularizer=None
+偏置矩阵的正则化方法：bias_regularizer=None
+权重矩阵的约束方法：kernel_constraint=None
+偏置矩阵的约束方法：bias_constraint=None
+对输出的正则化方法：activity_regularizer=None
+如果只需要 kernel_initializer, 则命名为：initializer
+
+attention：
+多头注意力中头的数目：num_attention_heads
+Query 和 Key 矩阵每个 head 的 hidden_size 的大小：size_per_head_for_query_and_key
+Value 矩阵每个 head 的 hidden_size 的大小：size_per_head_for_value
+dropout 层的丢弃率：attention_dropout_rate
+是否在加入 bias：use_bias
+为 einsum dense 指定经过 attention 之后 hidden_size 的大小：output_shape
+为 einsum dense 指定在哪个维度做 attention：attention_axes
+是否将 attention 之后得到的匹配度返回出来：return_attention_scores
+约定：在 attention mask 中，1 代表没有被 mask，0 代表被 mask
+
+全连接神经网络：
+中间隐藏层节点个数：intermediate_size
+
+输入：
+编码器输入：inputs
+解码器输入：targets
+句子长度：seq_len
+
+embedding:
+词嵌入维度：embedding_size
+句子类别的取值范围：type_vocab_size
+
+encoder/decoder:
+层数：num_layers
+是否返回 encoder 所有层的输出：return_all_encoder_outputs
+对各个子单元 dropout 的丢弃率：hidden_dropout_rate
+encoder 输入范围：output_range
