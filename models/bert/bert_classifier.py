@@ -1,7 +1,7 @@
 # -*- coding: utf - 8 -*-
 
 import tensorflow as tf
-from networks import regression_and_classification
+from networks import classification
 
 
 class BertClassifier(tf.keras.Model):
@@ -19,7 +19,7 @@ class BertClassifier(tf.keras.Model):
         if use_encoder_pooler:
             _, cls_output = network(inputs)
             cls_output = tf.keras.layers.Dropout(rate=dropout_rate)(cls_output)
-            self.classifier = regression_and_classification.Classification(
+            self.classifier = classification.Classification(
                 input_size=cls_output.shape[-1],
                 num_classes=num_classes,
                 initializer=initializer,
