@@ -1,7 +1,8 @@
 # -*- coding: utf - 8 -*-
 
 import tensorflow as tf
-from networks import classification
+from layers.head_layers.cls_head import ClassificationHead
+from networks.classification import Classification
 
 
 class BertClassifier(tf.keras.Model):
@@ -14,6 +15,16 @@ class BertClassifier(tf.keras.Model):
             use_encoder_pooler=True,
             **kwargs
     ):
+        self._self_setattr_tracking = False
+        self._network = network
+        self._config = {
+            'network': network,
+            'num_classes': num_classes,
+            'initializer': initializer,
+            'use_encoder_pooler': use_encoder_pooler
+        }
+
+        # bert_encoder
         inputs = network.inputs
 
         if use_encoder_pooler:
@@ -29,9 +40,26 @@ class BertClassifier(tf.keras.Model):
             predictions = self.classifier(cls_output)
         else:
             sequence_output, _ = network(inputs)
-            self.classifier = None
+            self.classifier = ClassificationHead(
+                inner_dim=sequence_output.shape[-1],
+                num_classes=num_classes,
+                initializer=initializer,
+                dropout_rate=dropout_rate,
+                name='sentence_prediction'
+            )
             predictions = self.classifier(sequence_output)
 
         super(BertClassifier, self).__init__(
             inputs=inputs, outputs=predictions, **kwargs
         )
+
+    @property
+    def checkpoint_items(self):
+        return dict(encoder=self._network)
+
+    def get_config(self):
+        return self._config
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        return cls(**config)

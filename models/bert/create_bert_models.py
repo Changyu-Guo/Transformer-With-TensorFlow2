@@ -2,8 +2,10 @@
 
 import tensorflow as tf
 from layers import utils
-from networks import transformer_encoder_for_bert, transformer_encoder_for_albert
-from models.bert.configs import BertConfig, ALBertConfig
+from networks.encoders.bert_encoder import BertEncoder
+from networks.encoders.albert_encoder import ALBertEncoder
+from models.bert.configs import BertConfig
+from models.albert.configs import ALBertConfig
 from models.bert.bert_classifier import BertClassifier
 
 
@@ -13,20 +15,22 @@ def get_transformer_encoder(
         transformer_encoder_cls=None,
         output_range=None
 ):
+    del seq_len
     if transformer_encoder_cls is not None:
         embedding_config = dict(
             vocab_size=bert_config.vocab_size,
             type_vocab_size=bert_config.type_vocab_size,
-            hidden_size=bert_config.max_position_embeddings,
+            hidden_size=bert_config.hidden_size,
+            max_seq_len=bert_config.max_position_embeddings,
             initializer=tf.keras.initializers.TruncatedNormal(
                 stddev=bert_config.initializer_range
             ),
             dropout_rate=bert_config.hidden_dropout_prob
         )
         hidden_config = dict(
-            num_heads=bert_config.num_attention_heads,
-            filter_size=bert_config.intermediate_size,
-            filter_activation=None,
+            num_attention_heads=bert_config.num_attention_heads,
+            intermediate_size=bert_config.intermediate_size,
+            intermediate_activation=tf.keras.activations.get(bert_config.hidden_act),
             dropout_rate=bert_config.hidden_dropout_prob,
             attention_dropout_rate=bert_config.attention_probs_dropout_prob,
             kernel_initializer=tf.keras.initializers.TruncatedNormal(
@@ -49,8 +53,8 @@ def get_transformer_encoder(
         hidden_size=bert_config.hidden_size,
         num_layers=bert_config.num_hidden_layers,
         num_attention_heads=bert_config.num_hidden_heads,
-        filter_size=bert_config.intermediate_size,
-        activation=None,
+        intermediate_size=bert_config.intermediate_size,
+        activation=tf.keras.activations.get(bert_config.hidden_act),
         dropout_rate=bert_config.hidden_dropout_prob,
         attention_dropout_rate=bert_config.attention_probs_dropout_prob,
         max_seq_len=bert_config.max_position_embeddings,
@@ -62,11 +66,11 @@ def get_transformer_encoder(
     )
 
     if isinstance(bert_config, ALBertConfig):
-        return transformer_encoder_for_albert.TransformerEncoderForALBert(**kwargs)
+        return ALBertEncoder(**kwargs)
     else:
         assert isinstance(bert_config, BertConfig)
         kwargs['output_range'] = output_range
-        return transformer_encoder_for_bert.TransformerEncoderForBert(**kwargs)
+        return BertEncoder(**kwargs)
 
 
 def create_classifier_model(
