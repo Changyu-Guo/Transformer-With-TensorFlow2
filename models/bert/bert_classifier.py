@@ -30,7 +30,7 @@ class BertClassifier(tf.keras.Model):
         if use_encoder_pooler:
             _, cls_output = network(inputs)
             cls_output = tf.keras.layers.Dropout(rate=dropout_rate)(cls_output)
-            self.classifier = classification.Classification(
+            self.classifier = Classification(
                 input_size=cls_output.shape[-1],
                 num_classes=num_classes,
                 initializer=initializer,
