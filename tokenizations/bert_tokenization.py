@@ -119,10 +119,12 @@ def convert_by_vocab(vocab, items):
 
 
 def convert_tokens_to_ids(vocab, tokens):
+    # vocab: token -> index dict
     return convert_by_vocab(vocab, tokens)
 
 
 def convert_ids_to_tokens(inv_vocab, ids):
+    # inv_vocab: index -> token dict
     return convert_by_vocab(inv_vocab, ids)
 
 
@@ -224,6 +226,7 @@ class BasicTokenizer(object):
         return "".join(output)
 
     def _is_chinese_char(self, cp):
+        # 中文字符
         if (
                 (0x4E00 <= cp <= 0x9FFF) or (0x3400 <= cp <= 0x4DBF) or
                 (0x20000 <= cp <= 0x2A6DF) or (0x2A700 <= cp <= 0x2B73F) or
@@ -235,6 +238,7 @@ class BasicTokenizer(object):
         return False
 
     def _clean_text(self, text):
+        # 清除空格和控制字符
         output = []
         for char in text:
             cp = ord(char)
