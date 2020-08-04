@@ -134,3 +134,6 @@ dmypy.json
 
 # SQuAD data
 data/*.json
+
+# vocab
+vocab.txt

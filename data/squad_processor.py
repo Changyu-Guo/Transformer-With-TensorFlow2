@@ -128,7 +128,7 @@ def read_squad_examples(input_file, is_training, version_2_with_negative):
         return False
 
     examples = []
-    for entry in input_data:
+    for entry in input_data[:2]:
         for paragraph in entry["paragraphs"]:
 
             # 对于每一个 context
@@ -385,28 +385,10 @@ def convert_examples_to_features(
             )
 
             # Run callback
-            if is_training:
-                output_fn(feature)
-            else:
-                output_fn(feature, is_padding=False)
+            output_fn(feature)
 
             unique_id += 1
 
-    if not is_training and feature:
-        assert batch_size
-        num_padding = 0
-        num_examples = unique_id - base_id
-        if unique_id % batch_size != 0:
-            num_padding = batch_size - (num_examples % batch_size)
-        logging.info("Adding padding examples to make sure no partial batch.")
-        logging.info("Adds %d padding examples for inference.", num_padding)
-        dummy_feature = copy.deepcopy(feature)
-        for _ in range(num_padding):
-            dummy_feature.unique_id = unique_id
-
-            # Run callback
-            output_fn(feature, is_padding=True)
-            unique_id += 1
     return unique_id - base_id
 
 
@@ -840,7 +822,7 @@ def generate_tf_record_from_json_file(
     }
 
     with open(train_meta_data_output_path, 'w', encoding='utf-8') as f:
-        f.write(json.dumps(train_meta_data, ensure_ascii=True, indent=2))
+        f.write(json.dumps(train_meta_data, ensure_ascii=False, indent=2))
     f.close()
 
     with open(eval_meta_data_output_path, 'w', encoding='utf-8') as f:
