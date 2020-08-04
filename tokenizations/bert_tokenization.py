@@ -8,8 +8,8 @@ import re
 import collections
 import unicodedata
 
-import sentencepiece as spm
 import six
+import sentencepiece as spm
 import tensorflow as tf
 
 SPIECE_UNDERLINE = "▁"

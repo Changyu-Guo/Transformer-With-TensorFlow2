@@ -132,8 +132,8 @@ dmypy.json
 .idea
 .vscode
 
-# SQuAD data
-data/*.json
+# datasets
+datasets
 
 # vocab
-vocab.txt
+datasets/vocab.txt
