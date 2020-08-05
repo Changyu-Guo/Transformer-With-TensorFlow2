@@ -149,6 +149,7 @@ class BertEncoder(tf.keras.Model):
         attention_mask = SelfAttentionMask()([data, inputs_mask])
         encoder_outputs = []
         for layer in self._transformer_encoder_layers:
+            # (batch_size, seq_len, hidden_size)
             data = layer([data, attention_mask])
             encoder_outputs.append(data)
 
@@ -161,6 +162,7 @@ class BertEncoder(tf.keras.Model):
             kernel_initializer=initializer,
             name='pooler_transform'
         )
+        # (batch_size, hidden_size)
         cls_output = self._pooler_layer(first_token_tensor)
 
         if return_all_encoder_outputs:

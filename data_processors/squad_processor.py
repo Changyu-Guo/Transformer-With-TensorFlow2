@@ -1,3 +1,5 @@
+# -*- coding: utf - 8 -*-
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -221,8 +223,7 @@ def convert_examples_to_features(
         doc_stride,
         max_query_length,
         is_training,
-        output_fn,
-        batch_size=None
+        output_fn
 ):
     base_id = 1000000000
     unique_id = base_id
