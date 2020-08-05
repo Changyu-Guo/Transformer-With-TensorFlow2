@@ -7,6 +7,7 @@ from __future__ import print_function
 import tensorflow as tf
 from layers import utils
 
+
 class MaskedLM(tf.keras.layers.Layer):
     def __init__(
             self,
@@ -53,21 +54,29 @@ class MaskedLM(tf.keras.layers.Layer):
         :param masked_positions: (batch_size, num_masked)
         :return:
         """
+
+        # 获取被 mask 掉的部分的 tensor (encoder output)
+        # (batch_size * num_masked, hidden_size)
         masked_tensor = self._gather_indexes(seqs, masked_positions)
 
         # 从 hidden_size 转回 embedding_size
+        # (batch_size * num_masked, embedding_size)
         lm_data = self.dense(masked_tensor)
 
         # layer norm
+        # (batch_size * num_masked, embedding_size)
         lm_data = self.layer_norm(lm_data)
 
         # 再转回 vocab_size
+        # (batch_size * num_masked, vocab_size)
         lm_data = tf.matmul(lm_data, self._embedding_table, transpose_b=True)
 
         # 加入 bias
-        # (batch_size * seq_len, vocab_size)
+        # (batch_size * num_masked, vocab_size)
         logits = tf.nn.bias_add(lm_data, self.bias)
 
+        # 获取被 mask 掉的词的位置
+        # (batch_size, num_masked)
         masked_positions_shape = utils.get_shape_list(
             masked_positions, name='masked_positions_tensor'
         )
@@ -90,13 +99,23 @@ class MaskedLM(tf.keras.layers.Layer):
             seqs_tensor, name='sequence_output_tensor'
         )
         batch_size, seq_len, hidden_size = seqs_shape
+
+        # (batch_size, 1)
+        # like [0, 128, ...]
         flat_seqs_offsets = tf.reshape(
             tf.range(0, batch_size, dtype=tf.int32) * seq_len, [-1, 1]
         )
+
+        # (batch_size * num_masked,)
         flat_words_positions = tf.reshape(positions + flat_seqs_offsets, [-1])
+
+        # (batch_size * seq_len, hidden_size)
         flat_words_tensor = tf.reshape(
             seqs_tensor, [batch_size * seq_len, hidden_size]
         )
+
+        # 获取被 mask 掉的 tensor
+        # (batch_size * num_masked, hidden_size)
         masked_tensor = tf.gather(flat_words_tensor, flat_words_positions)
 
         return masked_tensor
