@@ -8,6 +8,17 @@ import tensorflow as tf
 
 
 class Classification(tf.keras.Model):
+    """
+    该 Model 仅仅用于做分类
+    即从 input_size 映射到 num_classes
+    中间没有任何多余的操作
+
+    该 Model 用于对 encoder output 中的 cls_output 进行分类
+    区别于 layer.cls_head, layer.cls_head 只能用在 bert 模型中
+    而 classification 作为一个单独的模型可以使用在任何地方
+    当 num_classes 为 1 的时候，认为是在做回归
+
+    """
     def __init__(
             self,
             input_size,
@@ -39,7 +50,7 @@ class Classification(tf.keras.Model):
             policy = tf.float32
 
         predictions = tf.keras.layers.Activation(
-            tf.nn.softmax,
+            tf.nn.log_softmax,
             dtype=policy
         )(self.logits)
 
@@ -53,7 +64,7 @@ class Classification(tf.keras.Model):
                 '"predictions"' % output
             )
         super(Classification, self).__init__(
-            inputs=[cls_output], outputs=[output_tensors], **kwargs
+            inputs=[cls_output], outputs=output_tensors, **kwargs
         )
 
     def get_config(self):

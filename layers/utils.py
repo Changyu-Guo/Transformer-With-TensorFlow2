@@ -25,6 +25,7 @@ def get_shape_list(tensor, expected_rank=None, name=None):
     dyn_shape = tf.shape(tensor)
     for index in non_static_indexes:
         shape[index] = dyn_shape[index]
+
     return shape
 
 

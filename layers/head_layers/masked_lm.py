@@ -12,7 +12,7 @@ class MaskedLM(tf.keras.layers.Layer):
     def __init__(
             self,
             embedding_table,
-            activation=None,
+            activation='relu',
             initializer='glorot_uniform',
             output='logits',
             name='cls/prediction',
@@ -25,14 +25,15 @@ class MaskedLM(tf.keras.layers.Layer):
 
         if output not in ('predictions', 'logits'):
             raise ValueError(
-                'Unknown output value'
+                'Unknown output value %s. output can be either logits'
+                'or predictions' % output
             )
         self._output_type = output
 
     def build(self, input_shape):
         self._vocab_size, embedding_size = self._embedding_table.shape
         self.dense = tf.keras.layers.Dense(
-            embedding_size,
+            units=embedding_size,
             activation=self._activation,
             kernel_initializer=self._initializer,
             name='transformer/dense'
@@ -42,7 +43,7 @@ class MaskedLM(tf.keras.layers.Layer):
         )
         self.bias = self.add_weight(
             name='output_bias/bias',
-            shape=(self._vocab_size),
+            shape=(self._vocab_size,),
             initializer='zeros',
             trainable=True
         )
@@ -54,7 +55,6 @@ class MaskedLM(tf.keras.layers.Layer):
         :param masked_positions: (batch_size, num_masked)
         :return:
         """
-
         # 获取被 mask 掉的部分的 tensor (encoder output)
         # (batch_size * num_masked, hidden_size)
         masked_tensor = self._gather_indexes(seqs, masked_positions)
@@ -96,8 +96,11 @@ class MaskedLM(tf.keras.layers.Layer):
         :return:
         """
         seqs_shape = utils.get_shape_list(
-            seqs_tensor, name='sequence_output_tensor'
+            seqs_tensor,
+            expected_rank=3,
+            name='sequence_output_tensor'
         )
+
         batch_size, seq_len, hidden_size = seqs_shape
 
         # (batch_size, 1)

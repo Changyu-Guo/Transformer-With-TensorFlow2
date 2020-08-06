@@ -20,6 +20,7 @@ class BertPretrainer(tf.keras.Model):
             output='logits',
             **kwargs
     ):
+        super(BertPretrainer, self).__init__()
         self._config = {
             'network': network,
             'num_classes': num_classes,
@@ -78,7 +79,7 @@ class BertPretrainer(tf.keras.Model):
         # Masked LM 任务
         # (batch_size * num_masked, vocab_size)
         lm_outputs = self.masked_lm(
-            sequence_output, masked_lm_positions=masked_lm_positions
+            sequence_output,  masked_positions=masked_lm_positions
         )
 
         # NSP 任务
@@ -93,12 +94,8 @@ class BertPretrainer(tf.keras.Model):
 
         super(BertPretrainer, self).__init__(
             inputs=inputs,
-            outputs=dict(
-                masked_lm=lm_outputs,
-                classification=sentence_outputs
-            ),
-            **kwargs
-        )
+            outputs=dict(masked_lm=lm_outputs, classification=sentence_outputs),
+            **kwargs)
 
     def get_config(self):
         return self._config
