@@ -10,6 +10,7 @@ from layers.embedding_layers.position_embedding_layer import PositionEmbedding
 from layers.transformer_layers.encoder_layer import TransformerEncoderLayer
 from layers.attention_layers.self_attention_mask import SelfAttentionMask
 from layers.attention_layers.einsum_dense import EinsumDense
+from activations.gelu import gelu
 
 
 class BertEncoder(tf.keras.Model):
@@ -22,7 +23,7 @@ class BertEncoder(tf.keras.Model):
             max_seq_len=512,
             type_vocab_size=16,
             intermediate_size=3072,
-            activation='relu',
+            activation=gelu,
             hidden_dropout_rate=0.1,
             attention_dropout_rate=0.1,
             initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
@@ -70,7 +71,7 @@ class BertEncoder(tf.keras.Model):
 
         # 定义各层
 
-        # embedding layer
+        # word embedding
         if embedding_size is None:
             embedding_size = hidden_size
         if embedding_layer is None:
@@ -82,14 +83,16 @@ class BertEncoder(tf.keras.Model):
             )
         else:
             self._embedding_layer = embedding_layer
+        word_embeddings = self._embedding_layer(inputs_ids)
 
-        # position encoding layer
+        # position embedding
         self._position_embedding_layer = PositionEmbedding(
             initializer=initializer,
             use_dynamic_slicing=True,
             max_seq_len=max_seq_len,
             name='position_embedding'
         )
+        position_embeddings = self._position_embedding_layer(word_embeddings)
 
         # type embedding
         self._type_embedding_layer = OnDeviceEmbedding(
@@ -99,7 +102,23 @@ class BertEncoder(tf.keras.Model):
             use_one_hot=True,
             name='type_embedding'
         )
+        type_embeddings = self._type_embedding_layer(inputs_type_ids)
 
+        # 将各种 embedding 加起来
+        embeddings = tf.keras.layers.Add()(
+            [word_embeddings, position_embeddings, type_embeddings]
+        )
+
+        # layer norm and dropout
+        embeddings = tf.keras.layers.LayerNormalization(
+            name='embedding/layer_norm',
+            axis=-1,
+            epsilon=1e-12,
+            dtype=tf.float32
+        )(embeddings)
+        embeddings = tf.keras.layers.Dropout(rate=hidden_dropout_rate)(embeddings)
+
+        # 将 embedding_size 投影到 hidden_size
         if embedding_size != hidden_size:
             self._embedding_projection = EinsumDense(
                 '...x,xy->...y',
@@ -108,8 +127,13 @@ class BertEncoder(tf.keras.Model):
                 kernel_initializer=initializer,
                 name='embedding_projection'
             )
+            embeddings = self._embedding_projection(embeddings)
 
         self._transformer_encoder_layers = []
+        data = embeddings
+        attention_mask = SelfAttentionMask()([data, inputs_mask])
+        encoder_outputs = []
+
         for i in range(num_layers):
             if i == num_layers - 1 and output_range is not None:
                 transformer_output_range = output_range
@@ -127,29 +151,6 @@ class BertEncoder(tf.keras.Model):
                 name='transformer/layer_%d' % i
             )
             self._transformer_encoder_layers.append(layer)
-
-        # 定义运算
-        word_embeddings = self._embedding_layer(inputs_ids)
-        position_embeddings = self._position_embedding_layer(word_embeddings)
-        type_embeddings = self._type_embedding_layer(inputs_type_ids)
-        embeddings = tf.keras.layers.Add()(
-            [word_embeddings, position_embeddings, type_embeddings]
-        )
-        embeddings = tf.keras.layers.LayerNormalization(
-            name='embedding/layer_norm',
-            axis=-1,
-            epsilon=1e-12,
-            dtype=tf.float32
-        )(embeddings)
-        embeddings = tf.keras.layers.Dropout(rate=hidden_dropout_rate)(embeddings)
-        if embedding_size != hidden_size:
-            embeddings = self._embedding_projection(embeddings)
-
-        data = embeddings
-        attention_mask = SelfAttentionMask()([data, inputs_mask])
-        encoder_outputs = []
-        for layer in self._transformer_encoder_layers:
-            # (batch_size, seq_len, hidden_size)
             data = layer([data, attention_mask])
             encoder_outputs.append(data)
 
@@ -182,6 +183,9 @@ class BertEncoder(tf.keras.Model):
     def get_embedding_layer(self):
         return self._embedding_layer
 
+    def get_config(self):
+        return self._config_dict
+
     @property
     def transformer_layers(self):
         return self._transformer_encoder_layers
@@ -189,9 +193,6 @@ class BertEncoder(tf.keras.Model):
     @property
     def pooler_layer(self):
         return self._pooler_layer
-
-    def get_config(self):
-        return self._config_dict
 
     @classmethod
     def from_config(cls, config, custom_objects=None):

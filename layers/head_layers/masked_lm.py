@@ -25,7 +25,7 @@ class MaskedLM(tf.keras.layers.Layer):
 
         if output not in ('predictions', 'logits'):
             raise ValueError(
-                'Unknown output value %s. output can be either logits'
+                'Unknown output value "%s". output can be either logits'
                 'or predictions' % output
             )
         self._output_type = output

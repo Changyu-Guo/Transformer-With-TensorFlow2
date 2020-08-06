@@ -3,6 +3,7 @@
     <words>
       <w>dtype</w>
       <w>einsum</w>
+      <w>gelu</w>
       <w>glorot</w>
       <w>logit</w>
       <w>logits</w>

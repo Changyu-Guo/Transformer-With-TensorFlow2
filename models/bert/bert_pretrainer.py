@@ -1,8 +1,6 @@
 # -*- coding: utf - 8 -*-
 
 import copy
-from typing import List, Optional
-
 import tensorflow as tf
 from layers.head_layers.masked_lm import MaskedLM
 from networks.classification import Classification
@@ -20,7 +18,7 @@ class BertPretrainer(tf.keras.Model):
             output='logits',
             **kwargs
     ):
-        super(BertPretrainer, self).__init__()
+        self._self_setattr_tracking = False
         self._config = {
             'network': network,
             'num_classes': num_classes,
@@ -95,7 +93,8 @@ class BertPretrainer(tf.keras.Model):
         super(BertPretrainer, self).__init__(
             inputs=inputs,
             outputs=dict(masked_lm=lm_outputs, classification=sentence_outputs),
-            **kwargs)
+            **kwargs
+        )
 
     def get_config(self):
         return self._config

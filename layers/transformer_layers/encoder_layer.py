@@ -29,6 +29,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             use_bias=True,
             norm_first=False,
             norm_epsilon=1e-12,
+            intermediate_dropout=0.0,
             **kwargs
     ):
         super(TransformerEncoderLayer, self).__init__(**kwargs)
@@ -49,6 +50,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         self._use_bias = use_bias
         self._norm_first = norm_first
         self._norm_epsilon = norm_epsilon
+        self._intermediate_dropout = intermediate_dropout
 
     def build(self, input_shape):
         """
@@ -59,6 +61,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
 
         # 获取 input 相关参数
         input_tensor_shape = input_shape[0] if len(input_shape) == 2 else input_shape
+        input_tensor_shape = tf.TensorShape(input_tensor_shape)
         if len(input_tensor_shape) != 3:
             raise ValueError(
                 'TransformerEncoderLayer expects a three-dim input of '
@@ -68,7 +71,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
 
         # 获取 attention mask 相关参数
         if len(input_shape) == 2:
-            mask_tensor_shape = input_shape[1]
+            mask_tensor_shape = tf.TensorShape(input_shape[1])
             expected_mask_tensor_shape = tf.TensorShape(
                 [batch_size, seq_len, seq_len]
             )
@@ -113,7 +116,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         # attention 后接的 dropout
         # (任意 dense 操作之后都会接一个 dropout)
         self._attention_dropout = tf.keras.layers.Dropout(
-            rate=self._attention_dropout_rate
+            rate=self._hidden_dropout_rate
         )
         # attention 后接的 layer norm
         self._attention_layer_norm = tf.keras.layers.LayerNormalization(
@@ -131,9 +134,17 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             name='feed_forward_net',
             **common_kwargs
         )
+
+        policy = tf.keras.mixed_precision.experimental.global_policy()
+        if policy.name == 'mixed_bfloat16':
+            policy = tf.float32
+
         # 全连接神经网络的激活函数
         self._intermediate_dense_activation = tf.keras.layers.Activation(
-            self._intermediate_activation
+            self._intermediate_activation, dtype=policy
+        )
+        self._intermediate_dropout_layer = tf.keras.layers.Dropout(
+            rate=self._intermediate_dropout
         )
 
         # 输出
@@ -146,7 +157,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             **common_kwargs
         )
         self._output_dropout = tf.keras.layers.Dropout(
-            rate=self._attention_dropout_rate
+            rate=self._hidden_dropout_rate
         )
         self._output_layer_norm = tf.keras.layers.LayerNormalization(
             name='output_layer_norm',
@@ -203,3 +214,31 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             layer_output = self._output_layer_norm(layer_output + attention_output)
 
         return layer_output
+
+    def get_config(self):
+        config = {
+            'num_attention_heads': self._num_attention_heads,
+            'intermedia_size': self._intermediate_size,
+            'intermediate_activation': self._intermediate_activation,
+            'hidden_dropout_rate': self._hidden_dropout_rate,
+            'attention_dropout_rate': self._attention_dropout_rate,
+            'output_range': self._output_range,
+            'kernel_initializer': tf.keras.initializers.serialize(self._kernel_initializer),
+            'bias_initializer': tf.keras.initializers.serialize(self._bias_initializer),
+            'kernel_regularizer':
+                tf.keras.regularizers.serialize(self._kernel_regularizer),
+            'bias_regularizer':
+                tf.keras.regularizers.serialize(self._bias_regularizer),
+            'activity_regularizer':
+                tf.keras.regularizers.serialize(self._activity_regularizer),
+            'kernel_constraint':
+                tf.keras.constraints.serialize(self._kernel_constraint),
+            'bias_constraint':
+                tf.keras.constraints.serialize(self._bias_constraint),
+            'use_bias': self._use_bias,
+            'norm_first': self._norm_first,
+            'norm_epsilon': self._norm_epsilon,
+            'intermediate_dropout': self._intermediate_dropout
+        }
+        base_config = super(TransformerEncoderLayer, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))

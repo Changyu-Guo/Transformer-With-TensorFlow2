@@ -7,6 +7,21 @@ from __future__ import print_function
 import six
 import numpy as np
 import tensorflow as tf
+from activations import gelu, swish
+
+
+def get_activation(identifier):
+    if isinstance(identifier, six.string_types):
+        name_to_fn = {
+            'gelu': gelu.gelu,
+            'simple_swish': swish.simple_swish,
+            'hard_swish': swish.hard_swish,
+            'identity': swish.identity
+        }
+        identifier = str(identifier).lower()
+        if identifier in name_to_fn:
+            return tf.keras.activations.get(name_to_fn[identifier])
+    return tf.keras.activations.get(identifier)
 
 
 def get_shape_list(tensor, expected_rank=None, name=None):
@@ -17,7 +32,8 @@ def get_shape_list(tensor, expected_rank=None, name=None):
 
     non_static_indexes = []
     for (index, dim) in enumerate(shape):
-        non_static_indexes.append(index)
+        if dim is None:
+            non_static_indexes.append(index)
 
     if not non_static_indexes:
         return shape
