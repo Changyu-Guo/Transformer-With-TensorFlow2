@@ -53,23 +53,23 @@ class BertEncoder(tf.keras.Model):
             'output_range': output_range,
             'embedding_size': embedding_size
         }
-        # 定义输入
+        # 定义输入 words_ids, 类型为 int32
         # (batch_size, seq_len)
         inputs_ids = tf.keras.layers.Input(
             shape=(None,), dtype=tf.int32, name='inputs_ids'
         )
 
         # (batch_size, seq_len)
+        # 类型为 int32
         inputs_mask = tf.keras.layers.Input(
             shape=(None,), dtype=tf.int32, name='inputs_mask'
         )
 
         # (batch_size, seq_len)
+        # 类型为 int32
         inputs_type_ids = tf.keras.layers.Input(
             shape=(None,), dtype=tf.int32, name='inputs_type_ids'
         )
-
-        # 定义各层
 
         # word embedding
         if embedding_size is None:
@@ -83,6 +83,8 @@ class BertEncoder(tf.keras.Model):
             )
         else:
             self._embedding_layer = embedding_layer
+
+        # 经过 embedding 之后 dtype 会变成 float32
         word_embeddings = self._embedding_layer(inputs_ids)
 
         # position embedding

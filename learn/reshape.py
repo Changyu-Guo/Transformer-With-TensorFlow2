@@ -8,4 +8,4 @@ x = tf.reshape(
 
 y = tf.random.uniform(minval=1, maxval=100, shape=(32, 6), dtype=tf.int32)
 
-print(tf.reshape(x + y, [-1]))
+print(tf.reshape(x + y, (-1,)))

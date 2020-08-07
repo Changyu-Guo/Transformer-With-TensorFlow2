@@ -16,6 +16,8 @@ class BertClassifier(tf.keras.Model):
             **kwargs
     ):
         self._self_setattr_tracking = False
+
+        # bert encoder
         self._network = network
         self._config = {
             'network': network,
@@ -24,7 +26,8 @@ class BertClassifier(tf.keras.Model):
             'use_encoder_pooler': use_encoder_pooler
         }
 
-        # bert_encoder
+        # 获取 bert encoder 的输入
+        # 作为最终模型的输入
         inputs = network.inputs
 
         if use_encoder_pooler:

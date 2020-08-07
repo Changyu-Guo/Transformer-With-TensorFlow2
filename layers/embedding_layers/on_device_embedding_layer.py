@@ -44,7 +44,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
 
     def call(self, inputs):
         # 将 inputs 展平
-        flat_inputs = tf.reshape(inputs, [-1])
+        flat_inputs = tf.reshape(inputs, shape=(-1,))
 
         # 先将词转为 one-hot 再嵌入
         if self._use_one_hot:
@@ -54,13 +54,22 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
                 dtype=self.embeddings.dtype
             )
             embeddings = tf.matmul(one_hot_data, self.embeddings)
+
+        # 直接使用词表中的向量
         else:
             embeddings = tf.gather(self.embeddings, flat_inputs)
+
+        # (batch_size * seq_len,) -> (batch_size, seq_len, hidden_size)
         embeddings = tf.reshape(
             embeddings,
             tf.concat([tf.shape(inputs), [self._embedding_size]], axis=0)
         )
+
+        # set shape
         embeddings.set_shape(inputs.shape.as_list() + [self._embedding_size])
+
+        # scale
         if self._use_scale:
             embeddings *= self._embedding_size ** 0.5
+
         return embeddings
