@@ -349,3 +349,63 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         if self._return_attention_scores:
             return attention_output, attention_scores
         return attention_output
+
+
+class CacheAttention(MultiHeadAttention):
+    """用于自回归解码器的 Attention"""
+    def _update_cache(self, key, value, cache, decode_loop_step):
+        if decode_loop_step is not None:
+            key_seq_dim = cache['key'].shape.as_list()[1]
+            indices = tf.reshape(
+                tf.one_hot(
+                    decode_loop_step,
+                    key_seq_dim,
+                    dtype=key.dtype
+                ),
+                [1, key_seq_dim, 1, 1]
+            )
+            key = cache['key'] + key * indices
+            value_seq_dim = cache['value']
+            indices = tf.reshape(
+                tf.one_hot(decode_loop_step, value_seq_dim, dtype=value.dtype)
+                [1, value_seq_dim, 1, 1]
+            )
+        else:
+            key = tf.concat([tf.cast(cache['key'], key.dtype), key], axis=1)
+            value = tf.concat([tf.cast(cache['value'], value-dtype), value], axis=1)
+
+        cache['key'] = key
+        cache['value'] = value
+
+        return key, value
+
+    def call(self, query, value, key=None, attention_mask=None,
+             cache=None, decode_loop_step=None):
+        if not self._built_from_signature:
+            self._build_from_signature(query=query, value=value, key=key)
+        if key is None:
+            key = value
+
+        query = self._query_dense(query)
+
+        key = self._key_dense(key)
+
+        value = self._value_dense(value)
+
+        if cache:
+            key, value = self._update_cache(key, value, cache, decode_loop_step)
+
+        query = tf.multiply(query, 1.0 / math.sqrt(float(self._key_size)))
+
+        attention_scores = tf.einsum(self._dot_product_equation, key, query)
+
+        attention_scores = self._masked_softmax(attention_scores, attention_mask)
+
+        attention_scores = self._dropout_layer(attention_scores)
+
+        attention_output = tf.einsum(self._combine_equation, attention_scores, value)
+        attention_output = self._output_dense(attention_output)
+        if self._return_attention_scores:
+            return attention_output, attention_scores, cache
+        else:
+            return attention_output, cache

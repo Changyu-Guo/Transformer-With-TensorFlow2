@@ -11,6 +11,27 @@ from layers.attention_layers.einsum_dense import EinsumDense
 
 
 class TransformerEncoderLayer(tf.keras.layers.Layer):
+    """
+        Transformer 的编码器
+
+        主要包括如下结构：(不考虑 embedding layer，因为不在循环体内部)
+            1. attention layer (self-attention)
+                参数：
+                    1. num attention heads
+                    2. attention dropout rate
+                    3. attention initializer
+                    4. use bias ?
+                    5. norm first? 在 attention 之前做 layer norm 而不是之后
+                    6. norm param - norm epsilon
+            2. position-wise feed-forward network
+                参数：
+                    1. intermediate size / filter size
+                    2. intermediate activation
+                    3. intermediate dropout rate
+                    4. intermediate kernel initializer
+                    5. intermediate bias initializer
+
+    """
     def __init__(
             self,
             num_attention_heads,
@@ -29,17 +50,29 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             use_bias=True,
             norm_first=False,
             norm_epsilon=1e-12,
-            intermediate_dropout=0.0,
+            intermediate_dropout_rate=0.0,
+            attention_kernel_initializer=None,
             **kwargs
     ):
         super(TransformerEncoderLayer, self).__init__(**kwargs)
 
+        # attention
         self._num_attention_heads = num_attention_heads
+        self._attention_dropout_rate = attention_dropout_rate
+        self._attention_kernel_initializer = attention_kernel_initializer
+        self._use_bias = use_bias
+        self._norm_first = norm_first
+        self._norm_epsilon = norm_epsilon
+
+        # position-wise feed-forward network
         self._intermediate_size = intermediate_size
         self._intermediate_activation = intermediate_activation
+        self._intermediate_dropout = intermediate_dropout
+
         self._hidden_dropout_rate = hidden_dropout_rate
-        self._attention_dropout_rate = attention_dropout_rate
         self._output_range = output_range
+
+        # common args
         self._kernel_initializer = kernel_initializer
         self._bias_initializer = bias_initializer
         self._kernel_regularizer = kernel_regularizer
@@ -47,27 +80,24 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         self._activity_regularizer = activity_regularizer
         self._kernel_constraint = kernel_constraint
         self._bias_constraint = bias_constraint
-        self._use_bias = use_bias
-        self._norm_first = norm_first
-        self._norm_epsilon = norm_epsilon
-        self._intermediate_dropout = intermediate_dropout
 
     def build(self, input_shape):
         """
-        :param input_shape: 包含 inputs 和 mask 或仅包含 inputs
-        其中 inputs 的 shape 应该为 (batch_size, seq_len, hidden_size)
-        mask 的 shape 应该为 (batch_size, seq_len, seq_len)
+        :param input_shape: 包含 inputs shape 和 mask shape 或仅包含 inputs shape
+        其中 inputs shape 应该为 (batch_size, seq_len, hidden_size)
+        mask shape 应该为 (batch_size, seq_len, seq_len)
+        因为是 self-attention，所以两个 seq_len 相同
         """
 
-        # 获取 input 相关参数
-        input_tensor_shape = input_shape[0] if len(input_shape) == 2 else input_shape
-        input_tensor_shape = tf.TensorShape(input_tensor_shape)
-        if len(input_tensor_shape) != 3:
+        # 获取 inputs shape
+        inputs_tensor_shape = input_shape[0] if len(input_shape) == 2 else input_shape
+        inputs_tensor_shape = tf.TensorShape(inputs_tensor_shape)
+        if len(inputs_tensor_shape) != 3:
             raise ValueError(
                 'TransformerEncoderLayer expects a three-dim input of '
-                'shape [batch_size, seq_len, hidden_size]'
+                'shape (batch_size, seq_len, hidden_size)'
             )
-        batch_size, seq_len, hidden_size = input_tensor_shape
+        batch_size, seq_len, hidden_size = inputs_tensor_shape
 
         # 获取 attention mask 相关参数
         if len(input_shape) == 2:
@@ -78,19 +108,22 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             if not expected_mask_tensor_shape.is_compatible_with(mask_tensor_shape):
                 raise ValueError(
                     'When passing a mask tensor to TransformerEncoderLayer, the '
-                    'mask tensor must be of shape [batch_size, '
-                    'seq_len, seq_len] (here %s). Got a '
+                    'mask tensor must be of shape (batch_size, '
+                    'seq_len, seq_len) (here %s). Got a '
                     'mask tensor of shape %s.' %
                     (expected_mask_tensor_shape, mask_tensor_shape)
                 )
 
-        # 对 size per head 进行计算
+        # 在 attention 中
+        # query 和 key 具有相同的 size per head
+        # 而 key 和 value 具有相同的 seq_len
+        # 而在 self-attention 中
+        # 三者具有相同的 size per head 和 seq_len
         if hidden_size % self._num_attention_heads != 0:
             raise ValueError(
                 'The input size (%d) is not a multiple of the number of attention '
                 'heads (%d)' % (hidden_size, self._num_attention_heads)
             )
-
         self._size_per_head = int(hidden_size // self._num_attention_heads)
 
         # 构建通用参数
@@ -105,17 +138,18 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         )
 
         # attention layer
-        self._attention_layer = MultiHeadAttention(
+        self.attention_layer = MultiHeadAttention(
             num_attention_heads=self._num_attention_heads,
             size_per_head_for_query_and_key=self._size_per_head,
             attention_dropout_rate=self._attention_dropout_rate,
             use_bias=self._use_bias,
+            kernel_initializer=self._kernel_initializer,
             name='self_attention',
             **common_kwargs
         )
         # attention 后接的 dropout
         # (任意 dense 操作之后都会接一个 dropout)
-        self._attention_dropout = tf.keras.layers.Dropout(
+        self.attention_dropout = tf.keras.layers.Dropout(
             rate=self._hidden_dropout_rate
         )
         # attention 后接的 layer norm
@@ -242,3 +276,9 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         }
         base_config = super(TransformerEncoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+"""
+    
+
+"""
