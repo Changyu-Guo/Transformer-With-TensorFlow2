@@ -294,7 +294,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         )
         self._dropout_layer = tf.keras.layers.Dropout(rate=self._attention_dropout_rate)
 
-    def compute_attention(self, query, key, value, attention_mask=None):
+    def compute_attention(self, query, key, value, training, attention_mask=None):
         # do scale
         # [batch_size, seq_len, num_heads, size_per_head]
         query = tf.multiply(query, 1.0 / math.sqrt(float(self._size_per_head_for_query_and_key)))
@@ -308,15 +308,16 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         attention_scores = self._masked_softmax(attention_scores, attention_mask)
 
         # dropout
-        attention_scores_dropout = self._dropout_layer(attention_scores)
+        if training:
+            attention_scores = self._dropout_layer(attention_scores)
 
         # combine heads and multi value
-        attention_output = tf.einsum(self._combine_equation, attention_scores_dropout, value)
+        attention_output = tf.einsum(self._combine_equation, attention_scores, value)
 
         # return
         return attention_output, attention_scores
 
-    def call(self, query, value, key=None, attention_mask=None):
+    def call(self, query, value, training, key=None, attention_mask=None):
         """
         :param query: (batch_size, seq_len_q, hidden_size_q)
         :param value: (batch_size, seq_len_v, hidden_size_v)
@@ -342,7 +343,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         value = self._value_dense(value)
 
         attention_output, attention_scores = self.compute_attention(
-            query, key, value, attention_mask
+            query, key, value, training=training, attention_mask=attention_mask
         )
         attention_output = self._output_dense(attention_output)
 
@@ -407,6 +408,7 @@ class CacheAttention(MultiHeadAttention):
             self,
             query,
             value,
+            training,
             key=None,
             attention_mask=None,
             cache=None,
@@ -432,7 +434,8 @@ class CacheAttention(MultiHeadAttention):
 
         attention_scores = self._masked_softmax(attention_scores, attention_mask)
 
-        attention_scores = self._dropout_layer(attention_scores)
+        if training:
+            attention_scores = self._dropout_layer(attention_scores)
 
         attention_output = tf.einsum(self._combine_equation, attention_scores, value)
 

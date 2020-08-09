@@ -45,7 +45,7 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
         # (batch_size=None, seq_len=20, hidden_size=80)
         value = tf.keras.Input(shape=(20, 80))
 
-        output = test_layer(query=query, value=value)
+        output = test_layer(query=query, value=value, training=False)
         self.assertEqual(output.shape.as_list(), [None] + output_dims)
 
     def test_non_masked_self_attention(self):
@@ -54,7 +54,7 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
             size_per_head_for_query_and_key=64
         )
         query = tf.keras.Input(shape=(40, 80))
-        output = test_layer(query, query)
+        output = test_layer(query, query, training=False)
         self.assertEqual(output.shape.as_list(), [None, 40, 80])
 
     def test_attention_scores(self):
@@ -64,7 +64,7 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
             return_attention_scores=True
         )
         query = tf.keras.Input(shape=(40, 80))
-        output, scores = test_layer(query, query)
+        output, scores = test_layer(query, query, training=False)
         self.assertEqual(output.shape.as_list(), [None, 40, 80])
         # (batch_size, num_heads, seq_len, seq_len)
         self.assertEqual(scores.shape.as_list(), [None, 12, 40, 40])
@@ -86,7 +86,8 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
         output = test_layer(
             query=query,
             value=value,
-            attention_mask=mask_tensor
+            attention_mask=mask_tensor,
+            training=False
         )
         model = tf.keras.Model([query, value, mask_tensor], output)
 
@@ -128,7 +129,7 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
             kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02)
         )
         query = tf.keras.Input(shape=(40, 80))
-        output = test_layer(query, query)
+        output = test_layer(query, query, training=False)
         self.assertEqual(output.shape.as_list(), [None, 40, 80])
 
     @parameterized.named_parameters(
@@ -160,7 +161,8 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
         unmasked_output = test_layer(
             query=query,
             value=value,
-            attention_mask=null_mask_data
+            attention_mask=null_mask_data,
+            training=False
         )
         self.assertNotAllClose(output, unmasked_output)
 

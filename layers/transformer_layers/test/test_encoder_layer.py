@@ -28,7 +28,7 @@ class EncoderLayerTest(keras_parameterized.TestCase):
         seq_len = 21
         hidden_size = 80
         data_tensor = tf.keras.Input(shape=(seq_len, hidden_size))
-        output_tensor = test_layer(data_tensor)
+        output_tensor = test_layer(data_tensor, training=False)
         self.assertEqual(data_tensor.shape.as_list(), output_tensor.shape.as_list())
 
     def test_layer_creation_with_mask(self, transformer_cls):
@@ -42,7 +42,7 @@ class EncoderLayerTest(keras_parameterized.TestCase):
 
         data_tensor = tf.keras.Input(shape=(seq_len, hidden_size))
         mask_tensor = tf.keras.Input(shape=(seq_len, seq_len))
-        output_tensor = test_layer([data_tensor, mask_tensor])
+        output_tensor = test_layer([data_tensor, mask_tensor], training=False)
         self.assertEqual(data_tensor.shape.as_list(), output_tensor.shape.as_list())
 
     def test_layer_creation_with_error_mask_fails(self, transformer_cls):
@@ -56,7 +56,7 @@ class EncoderLayerTest(keras_parameterized.TestCase):
         data_tensor = tf.keras.Input(shape=(seq_len, hidden_size))
         mask_tensor = tf.keras.Input(shape=(seq_len, seq_len - 3))
         with self.assertRaisesRegex(ValueError, 'When passing a mask tensor.*'):
-            _ = test_layer([data_tensor, mask_tensor])
+            _ = test_layer([data_tensor, mask_tensor], training=True)
 
 
 if __name__ == '__main__':

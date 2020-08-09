@@ -188,7 +188,7 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         )
         super(TransformerEncoderLayer, self).build(input_shape)
 
-    def call(self, inputs):
+    def call(self, inputs, training):
         # input: (batch_size, seq_len, hidden_size)
         # mask: (batch_size, seq_len, seq_len)
         if isinstance(inputs, (list, tuple)) and len(inputs) == 2:
@@ -208,14 +208,16 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             key=inputs_tensor,
             attention_mask=attention_mask
         )
-        attention_output = self.attention_dropout(attention_output)
+        if training:
+            attention_output = self.attention_dropout(attention_output)
+
         # 如果之前做过 layer norm，这里只需要进行残差连接
         if self._norm_first:
             attention_output = source_tensor + attention_output
         # 否则先残差连接，然后 layer norm
         else:
             attention_output = self.attention_layer_norm(
-                target_tensor + attention_output
+                inputs_tensor + attention_output
             )
 
         if self._norm_first:
@@ -226,7 +228,9 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         feed_forward_net_output = self.intermediate_dense_activation(feed_forward_net_output)
 
         layer_output = self.output_dense(feed_forward_net_output)
-        layer_output = self.output_dropout(layer_output)
+
+        if training:
+            layer_output = self.output_dropout(layer_output)
 
         layer_output = tf.cast(layer_output, tf.float32)
         if self._norm_first:

@@ -157,7 +157,7 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
         )
         super(TransformerDecoderLayer, self).build(input_shape)
 
-    def call(self, inputs, cache=None, decode_loop_step=None):
+    def call(self, inputs, training, cache=None, decode_loop_step=None):
         targets_tensor, encoder_output, encoder_decoder_attention_mask, self_attention_mask = inputs[:4]
         source_tensor = targets_tensor
         if self._norm_first:
@@ -171,7 +171,10 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
             cache=cache,
             decode_loop_step=decode_loop_step
         )
-        self_attention_output = self.self_attention_dropout(self_attention_output)
+
+        if training:
+            self_attention_output = self.self_attention_dropout(self_attention_output)
+
         if self._norm_first:
             self_attention_output = source_tensor + self_attention_output
         else:
@@ -193,7 +196,10 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
         attention_output = self.encoder_decoder_attention(
             **encoder_decoder_attention_inputs
         )
-        attention_output = self.encoder_decoder_attention_dropout(attention_output)
+
+        if training:
+            attention_output = self.encoder_decoder_attention_dropout(attention_output)
+
         if self._norm_first:
             attention_output = source_self_attention_output + attention_output
         else:
@@ -206,9 +212,15 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
 
         intermediate_output = self.intermediate_dense(attention_output)
         intermediate_output = self.intermediate_activation_layer(intermediate_output)
-        intermediate_output = self.intermediate_dropout_layer(intermediate_output)
+
+        if training:
+            intermediate_output = self.intermediate_dropout_layer(intermediate_output)
+
         layer_output = self.output_dense(intermediate_output)
-        layer_output = self.output_dropout(layer_output)
+
+        if training:
+            layer_output = self.output_dropout(layer_output)
+
         if self._norm_first:
             layer_output = source_self_attention_output + layer_output
         else:
