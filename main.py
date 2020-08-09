@@ -7,29 +7,37 @@ from __future__ import print_function
 import time
 import tensorflow as tf
 
+batch_size = 2
+seq_len_query = 4
+seq_len_key_value = 6
+hidden_size = 8
 
-batch_size = 32
-seq_len = 128
-hidden_size = 512
 
-x = tf.random.uniform(minval=1, maxval=100, shape=(batch_size, seq_len, hidden_size))
-y = tf.random.uniform(minval=1, maxval=100, shape=(batch_size, seq_len, hidden_size))
+query = tf.random.uniform(
+    minval=0,
+    maxval=100,
+    shape=(batch_size, seq_len_query, hidden_size)
+)
 
-matmul_times = []
-einsum_times = []
+key = tf.random.uniform(
+    minval=0,
+    maxval=100,
+    shape=(batch_size, seq_len_key_value, hidden_size)
+)
 
-for _ in range(10):
-    start = time.time()
-    for i in range(100000):
-        z = tf.matmul(x, y, transpose_b=True)
-    end = time.time()
-    matmul_times.append(end - start)
+value = tf.random.uniform(
+    minval=0,
+    maxval=100,
+    shape=(batch_size, seq_len_key_value, hidden_size)
+)
 
-    start = time.time()
-    for i in range(100000):
-        z = tf.einsum('abc,adc->abd', x, y)
-    end = time.time()
-    einsum_times.append(end - start)
+# (batch_size, seq_len_query, seq_len_key_value)
+attention = tf.matmul(query, key, transpose_b=True)
 
-print('matmul: ', tf.reduce_mean(matmul_times).numpy())
-print('einsum: ', tf.reduce_mean(einsum_times).numpy())
+mask = tf.random.uniform(
+    minval=0,
+    maxval=1,
+    shape=(batch_size, seq_len_query, seq_len_key_value)
+)
+
+print(attention + mask)

@@ -352,35 +352,66 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
 
 class CacheAttention(MultiHeadAttention):
-    """用于自回归解码器的 Attention"""
-    def _update_cache(self, key, value, cache, decode_loop_step):
+    """
+        用于自回归解码器的 Attention
+        除了 cache 部分其余都和基类一致
+        只有在 predict 的时候 decoder 才需要 cache
+        而在 train 的时候将 cache 设置为 None, 与基类保持一致即可
+
+        cache 样例：
+            {
+                'key': (batch_size, seq_len_key, num_heads, hidden_size),
+                'value': (batch_size, seq_len_value, num_heads, hidden_size)
+            }
+        其中 decoded_len 会随着解码的进行不断增加
+        初始情况下应该使用 tf.zeros 初始化，表示 [START]
+    """
+    def _update_cache(
+            self,
+            key,
+            value,
+            cache,
+            decode_loop_step
+    ):
         if decode_loop_step is not None:
             key_seq_dim = cache['key'].shape.as_list()[1]
             indices = tf.reshape(
                 tf.one_hot(
-                    decode_loop_step,
-                    key_seq_dim,
+                    indices=decode_loop_step,
+                    depth=key_seq_dim,
                     dtype=key.dtype
                 ),
                 [1, key_seq_dim, 1, 1]
             )
             key = cache['key'] + key * indices
-            value_seq_dim = cache['value']
+            value_seq_dim = cache['value'].shape.as_list()[1]
             indices = tf.reshape(
-                tf.one_hot(decode_loop_step, value_seq_dim, dtype=value.dtype)
+                tf.one_hot(
+                    indices=decode_loop_step,
+                    depth=value_seq_dim,
+                    dtype=value.dtype
+                ),
                 [1, value_seq_dim, 1, 1]
             )
+            value = cache['value'] + value * indices
         else:
             key = tf.concat([tf.cast(cache['key'], key.dtype), key], axis=1)
-            value = tf.concat([tf.cast(cache['value'], value-dtype), value], axis=1)
+            value = tf.concat([tf.cast(cache['value'], value.dtype), value], axis=1)
 
         cache['key'] = key
         cache['value'] = value
 
         return key, value
 
-    def call(self, query, value, key=None, attention_mask=None,
-             cache=None, decode_loop_step=None):
+    def call(
+            self,
+            query,
+            value,
+            key=None,
+            attention_mask=None,
+            cache=None,
+            decode_loop_step=None
+    ):
         if not self._built_from_signature:
             self._build_from_signature(query=query, value=value, key=key)
         if key is None:
@@ -395,7 +426,7 @@ class CacheAttention(MultiHeadAttention):
         if cache:
             key, value = self._update_cache(key, value, cache, decode_loop_step)
 
-        query = tf.multiply(query, 1.0 / math.sqrt(float(self._key_size)))
+        query = tf.multiply(query, 1.0 / math.sqrt(float(self._size_per_head_for_query_and_key)))
 
         attention_scores = tf.einsum(self._dot_product_equation, key, query)
 
@@ -404,8 +435,9 @@ class CacheAttention(MultiHeadAttention):
         attention_scores = self._dropout_layer(attention_scores)
 
         attention_output = tf.einsum(self._combine_equation, attention_scores, value)
+
         attention_output = self._output_dense(attention_output)
+
         if self._return_attention_scores:
             return attention_output, attention_scores, cache
-        else:
-            return attention_output, cache
+        return attention_output, cache

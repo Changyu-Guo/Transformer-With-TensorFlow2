@@ -6,8 +6,10 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from layers.attention_layers.multi_head_attention_layer import CacheAttention, MultiHeadAttention
+from layers.attention_layers.multi_head_attention_layer import MultiHeadAttention
+from layers.attention_layers.multi_head_attention_layer import CacheAttention
 from layers.attention_layers.einsum_dense import EinsumDense
+
 
 class TransformerDecoderLayer(tf.keras.layers.Layer):
     """
@@ -84,7 +86,6 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
         self.self_attention = CacheAttention(
             num_attention_heads=self._num_attention_heads,
             size_per_head_for_query_and_key=self._size_per_head_for_query_and_key,
-            size_per_head_for_value=self._size_per_head_for_query_and_key,
             attention_dropout_rate=self._attention_dropout_rate,
             use_bias=self._use_bias,
             name='self_attention',
@@ -157,18 +158,15 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
         super(TransformerDecoderLayer, self).build(input_shape)
 
     def call(self, inputs, cache=None, decode_loop_step=None):
-        (
-            inputs_tensor,
-            encoder_output,
-            encoder_decoder_attention_mask,
-            self_attention_mask
-        ) = inputs[:4]
-        source_tensor = inputs_tensor
-        if self_norm_first:
-            inputs_tensor = self.self_attention_layer_norm(inputs_tensor)
+        targets_tensor, encoder_output, encoder_decoder_attention_mask, self_attention_mask = inputs[:4]
+        source_tensor = targets_tensor
+        if self._norm_first:
+            targets_tensor = self.self_attention_layer_norm(targets_tensor)
+
+        # 新的 cache 会被返回，用于下一轮解码
         self_attention_output, cache = self.self_attention(
-            query=inputs_tensor,
-            value=inputs_tensor,
+            query=targets_tensor,
+            value=targets_tensor,
             attention_mask=self_attention_mask,
             cache=cache,
             decode_loop_step=decode_loop_step
@@ -178,7 +176,7 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
             self_attention_output = source_tensor + self_attention_output
         else:
             self_attention_output = self.self_attention_layer_norm(
-                inputs_tensor + self_attention_output
+                targets_tensor + self_attention_output
             )
 
         if self._norm_first:

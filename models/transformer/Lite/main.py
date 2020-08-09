@@ -45,7 +45,7 @@ def scaled_dot_product_attention(q, k, v, mask):
     :param q: (batch_size, [num_heads], seq_len_q, hidden_size_q)
     :param k: (batch_size, [num_heads], seq_len_k, hidden_size_k)
     :param v: (batch_size, [num_heads], seq_len_v, hidden_size_v)
-    :param mask: (batch_size, 1, 1, seq_len)
+    :param mask: (batch_size, 1, 1, seq_len_k) or (seq_len_k, seq_len_k)
     hidden_size_q == hidden_size_k
     seq_len_k == seq_len_v
     """
