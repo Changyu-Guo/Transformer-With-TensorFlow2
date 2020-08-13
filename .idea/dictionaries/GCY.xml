@@ -3,6 +3,8 @@
     <words>
       <w>dtype</w>
       <w>einsum</w>
+      <w>filepaths</w>
+      <w>fname</w>
       <w>gelu</w>
       <w>glorot</w>
       <w>logit</w>
@@ -12,6 +14,7 @@
       <w>probs</w>
       <w>punc</w>
       <w>regularizer</w>
+      <w>subtoken</w>
       <w>wordpiece</w>
     </words>
   </dictionary>
