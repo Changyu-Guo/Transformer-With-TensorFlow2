@@ -12,6 +12,16 @@
 - `return_attention_scores`
 - `norm_first`
 
+**注：**
+
+对于`Attention`中的两种`mask`，即`padding_mask`和`look_ahead_mask`，初始情况下一律使用如下`shape`：
+
+`padding_mask`：`(batch_size, seq_len)`
+
+`look_ahead_mask`：`(seq_len, seq_len)`
+
+在`Attention`运算的过程中，再做`shape`上的转变
+
 ## Position-Wise Feed-Forward Network
 
 - `intermediate_size`

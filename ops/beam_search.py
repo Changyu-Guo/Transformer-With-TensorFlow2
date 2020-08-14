@@ -534,16 +534,18 @@ class SequenceBeamSearch(tf.Module):
             tf.logical_not(worst_finished_score_better_than_best_alive_score))
 
 
-def sequence_beam_search(symbols_to_logits_fn,
-                         initial_ids,
-                         initial_cache,
-                         vocab_size,
-                         beam_size,
-                         alpha,
-                         max_decode_length,
-                         eos_id,
-                         padded_decode=False,
-                         dtype="float32"):
+def sequence_beam_search(
+        symbols_to_logits_fn,
+        initial_ids,
+        initial_cache,
+        vocab_size,
+        beam_size,
+        alpha,
+        max_decode_length,
+        eos_id,
+        padded_decode=False,
+        dtype="float32"
+):
     """Search for sequence of subtoken ids with the largest probability.
 
     Args:

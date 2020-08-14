@@ -91,13 +91,13 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         if len(input_shape) == 2:
             mask_tensor_shape = tf.TensorShape(input_shape[1])
             expected_mask_tensor_shape = tf.TensorShape(
-                [batch_size, seq_len, seq_len]
+                [batch_size, seq_len]
             )
             if not expected_mask_tensor_shape.is_compatible_with(mask_tensor_shape):
                 raise ValueError(
                     'When passing a mask tensor to TransformerEncoderLayer, the '
                     'mask tensor must be of shape (batch_size, '
-                    'seq_len, seq_len) (here %s). Got a '
+                    'seq_len) (here %s). Got a '
                     'mask tensor of shape %s.' %
                     (expected_mask_tensor_shape, mask_tensor_shape)
                 )

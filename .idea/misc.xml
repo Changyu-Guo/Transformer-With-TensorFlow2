@@ -4,8 +4,9 @@
     <option name="languageLevel" value="ES6" />
   </component>
   <component name="ProjectPlainTextFileTypeManager">
-    <file url="file://$PROJECT_DIR$/corpus.txt" />
     <file url="file://$PROJECT_DIR$/datasets/vocab.txt" />
+    <file url="file://$PROJECT_DIR$/learn/sentencepiece/botchan.txt" />
+    <file url="file://$PROJECT_DIR$/learn/sentencepiece/corpus.txt" />
     <file url="file://$PROJECT_DIR$/parameter_names_agreement.txt" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.6" project-jdk-type="Python SDK" />

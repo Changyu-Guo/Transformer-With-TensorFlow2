@@ -5,15 +5,22 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import sys
 import random
 import tarfile
 import urllib.request
 import tensorflow as tf
+from absl import app
 from absl import logging
+from absl import flags
 
-_PREFIX = ''
-_TRAIN_TAG = ''
-_EVAL_TAG = ''
+sys.path.append('D:\\projects\\Transformers-With-TensorFlow2')
+
+from tokenizations import sub_tokenization
+
+_PREFIX = 'wmt32k'
+_TRAIN_TAG = 'train'
+_EVAL_TAG = 'dev'
 
 _TRAIN_SHARDS = 100
 _EVAL_SHARDS = 1
@@ -23,9 +30,27 @@ _TRAIN_DATA_SOURCES = [
         'url': 'http://data.statmt.org/wmt17/translation-task/'
                'training-parallel-nc-v12.tgz',
         'input': 'news-commentary-v12.de-en.en',
-        'targets': 'news-commentary-v12.de-en.de'
+        'target': 'news-commentary-v12.de-en.de'
     }
 ]
+
+_TRAIN_DATA_MIN_COUNT = 6
+
+_EVAL_DATA_SOURCES = [{
+    'url': 'http://data.statmt.org/wmt17/translation-task/dev.tgz',
+    'input': 'newstest2013.en',
+    'target': 'newstest2013.de'
+}]
+
+_TEST_DATA_SOURCES = [{
+    'url': 'https://storage.googleapis.com/tf-perf-public/official_transformer/test_data/newstest2014.tgz',
+    'input': 'newstest2014.en',
+    'target': 'newstest2014.de'
+}]
+
+_TARGET_VOCAB_SIZE = 32768
+_TARGET_THRESHOLD = 327
+VOCAB_FILE = 'vocab.ende.%d' % _TARGET_VOCAB_SIZE
 
 
 def find_file(path, filename, max_depth=5):
@@ -135,7 +160,7 @@ def compile_files(raw_dir, raw_files, tag):
         将多个输入文件和输出文件组合到两个单独的文件中，方便后续处理
     """
 
-    logging.info('Compiling files with tag %s.' & tag)
+    logging.info('Compiling files with tag %s.' % tag)
     filename = '%s-%s' % (_PREFIX, tag)
     input_compiled_file = os.path.join(raw_dir, filename + '.lang1')
     target_compiled_file = os.path.join(raw_dir, filename + '.lang2')
@@ -190,9 +215,9 @@ def encode_and_save_files(
     writers = [tf.io.TFRecordWriter(fname) for fname in tmp_filepaths]
     counter, shard = 0, 0
     for counter, (input_line, target_line) in enumerate(
-        zip(
-            txt_line_iterator(input_file), txt_line_iterator(target_file)
-        )
+            zip(
+                txt_line_iterator(input_file), txt_line_iterator(target_file)
+            )
     ):
         if counter > 0 and counter % 100000 == 0:
             logging.info('\tSaving case %d.' % counter)
@@ -203,7 +228,7 @@ def encode_and_save_files(
                 'targets': sub_tokenizer_lang_target.encode(target_line, add_eos=True)
             }
         )
-        writers[shard].write(example.SerializaToString())
+        writers[shard].write(example.SerializeToString())
         shard = (shard + 1) % total_shards
 
     for writer in writers:
@@ -230,6 +255,30 @@ def all_exist(filepaths):
     return True
 
 
+def shuffle_records(fname):
+    logging.info('Shuffling records in file %s' % fname)
+
+    tmp_fname = fname + '.unshuffled'
+    tf.io.gfile.rename(fname, tmp_fname)
+
+    reader = tf.data.TFRecordDataset(tmp_fname)
+    records = []
+    for record in reader:
+        records.append(record)
+        if len(records) % 100000 == 0:
+            logging.info('\tRead: %d', len(records))
+
+    random.shuffle(records)
+
+    with tf.io.TFRecordWriter(fname) as w:
+        for count, record in enumerate(records):
+            w.write(record)
+            if count > 0 and count % 100000 == 0:
+                logging.info('\tWriting record: %d', count)
+
+    tf.io.gfile.remove(tmp_fname)
+
+
 def dict_to_example(dictionary):
     features = {}
     for k, v in dictionary.items():
@@ -237,3 +286,81 @@ def dict_to_example(dictionary):
             int64_list=tf.train.Int64List(value=v)
         )
     return tf.train.Example(features=tf.train.Features(feature=features))
+
+
+def make_dir(path):
+    if not tf.io.gfile.exists(path):
+        tf.io.gfile.makedirs(path)
+
+
+def define_processor_flags():
+    flags.DEFINE_string(
+        name='data_dir',
+        default='D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende',
+        help=''
+    )
+    flags.DEFINE_string(
+        name='raw_dir',
+        default='D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende_raw',
+        help=''
+    )
+    flags.DEFINE_bool(
+        name='search',
+        default=False,
+        help=''
+    )
+
+
+def main(_):
+    make_dir(FLAGS.raw_dir)
+    make_dir(FLAGS.data_dir)
+
+    logging.info('Step 1/5: Downloading test data')
+    get_raw_files(FLAGS.data_dir, _TEST_DATA_SOURCES)
+
+    logging.info('Step 2/5: Download data from source')
+    train_files = get_raw_files(FLAGS.raw_dir, _TRAIN_DATA_SOURCES)
+    eval_files = get_raw_files(FLAGS.raw_dir, _EVAL_DATA_SOURCES)
+
+    logging.info('Step 3/5: Creating sub tokenizer and building vocabulary')
+    train_files_flat = train_files['inputs'] + train_files['targets']
+    vocab_file = os.path.join(FLAGS.data_dir, VOCAB_FILE)
+    sub_tokenizer = sub_tokenization.Subtokenizer.init_from_files(
+        vocab_file,
+        train_files_flat,
+        _TARGET_VOCAB_SIZE,
+        _TARGET_THRESHOLD,
+        min_count=None if FLAGS.search else _TRAIN_DATA_MIN_COUNT
+    )
+
+    logging.info('Step 4/5: Compiling training and evaluation data')
+    compiled_train_files = compile_files(FLAGS.raw_dir, train_files, _TRAIN_TAG)
+    compiled_eval_files = compile_files(FLAGS.raw_dir, eval_files, _EVAL_TAG)
+
+    logging.info('Step 5/5: Preprocessing and saving data')
+    train_tfrecord_files = encode_and_save_files(
+        sub_tokenizer,
+        sub_tokenizer,
+        FLAGS.data_dir,
+        compiled_train_files,
+        _TRAIN_TAG,
+        _TRAIN_SHARDS
+    )
+    encode_and_save_files(
+        sub_tokenizer,
+        sub_tokenizer,
+        FLAGS.data_dir,
+        compiled_eval_files,
+        _EVAL_TAG,
+        _EVAL_SHARDS
+    )
+
+    # for fname in train_tfrecord_files:
+    #     shuffle_records(fname)
+
+
+if __name__ == '__main__':
+    logging.set_verbosity(logging.INFO)
+    define_processor_flags()
+    FLAGS = flags.FLAGS
+    app.run(main)

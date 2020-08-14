@@ -63,15 +63,26 @@ def assert_rank(tensor, expected_rank, name=None):
 
 
 def get_look_ahead_mask(length, dtype=tf.float32):
+    """
+    :param length: seq_len
+    :param dtype:
+    :return: (seq_len, seq_len)
+    """
     with tf.name_scope('look_ahead_mask'):
         look_ahead_mask = 1 - tf.linalg.band_part(tf.ones([length, length], dtype=dtype), -1, 0)
-        return look_ahead_mask[tf.newaxis, tf.newaxis, :, :]
+        return look_ahead_mask
 
 
 def get_attention_padding_mask(seqs, padding_value=0, dtype=tf.float32):
+    """
+    :param seqs: (batch_size, seq_len)
+    :param padding_value: 0
+    :param dtype:
+    :return: (batch_size, seq_len)
+    """
     with tf.name_scope('attention_padding_mask'):
         attention_padding_mask = tf.cast(tf.equal(seqs, padding_value), dtype)
-        attention_padding_mask = tf.expand_dims(
-            tf.expand_dims(attention_padding_mask, axis=1), axis=1
-        )
+        # attention_padding_mask = tf.expand_dims(
+        #     tf.expand_dims(attention_padding_mask, axis=1), axis=1
+        # )
     return attention_padding_mask
