@@ -91,13 +91,13 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
         if len(input_shape) == 2:
             mask_tensor_shape = tf.TensorShape(input_shape[1])
             expected_mask_tensor_shape = tf.TensorShape(
-                [batch_size, seq_len]
+                [batch_size, 1, seq_len]
             )
             if not expected_mask_tensor_shape.is_compatible_with(mask_tensor_shape):
                 raise ValueError(
                     'When passing a mask tensor to TransformerEncoderLayer, the '
                     'mask tensor must be of shape (batch_size, '
-                    'seq_len) (here %s). Got a '
+                    '1, seq_len) (here %s). Got a '
                     'mask tensor of shape %s.' %
                     (expected_mask_tensor_shape, mask_tensor_shape)
                 )
@@ -190,11 +190,11 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
 
     def call(self, inputs, training):
         # input: (batch_size, seq_len, hidden_size)
-        # mask: (batch_size, seq_len, seq_len)
+        # mask: (batch_size, 1, seq_len)
         if isinstance(inputs, (list, tuple)) and len(inputs) == 2:
-            inputs_tensor, attention_mask = inputs
+            inputs_tensor, inputs_padding_mask = inputs
         else:
-            inputs_tensor, attention_mask = (inputs, None)
+            inputs_tensor, inputs_padding_mask = (inputs, None)
 
         if self._norm_first:
             source_tensor = inputs_tensor  # 保留操作前的数据，用于后面残差连接
@@ -202,11 +202,12 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
 
         # self-attention
         # query = key = value
+        # (batch_size, seq_len, hidden_size)
         attention_output = self.attention_layer(
             query=inputs_tensor,
             value=inputs_tensor,
             key=inputs_tensor,
-            attention_mask=attention_mask
+            attention_mask=inputs_padding_mask
         )
         if training:
             attention_output = self.attention_dropout(attention_output)

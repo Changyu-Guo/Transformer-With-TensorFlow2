@@ -37,7 +37,8 @@ def create_model(params, is_train):
             model.add_loss(loss)
             return model
         else:
-            inputs = tf.keras.layers.Input((None,), dtype=tf.int64, name='inputs')
+            # (batch_size, seq_len)
+            inputs = tf.keras.layers.Input((None,), dtype=tf.int32, name='inputs')
             static_model = Transformer(
                 params,
                 name='transformer_v2'
@@ -133,8 +134,10 @@ class Transformer(tf.keras.Model):
             inputs, targets = inputs[0], None
 
         with tf.name_scope('transformer'):
-            inputs_padding_mask = utils.get_attention_padding_mask(inputs)
+            # (batch_size, 1, seq_len)
+            inputs_padding_mask = utils.get_padding_mask(inputs)
 
+            # (batch_size, inputs_seq_len, hidden_size)
             encoder_outputs = self.encode(inputs, inputs_padding_mask, training)
 
             if targets is None:
@@ -147,12 +150,13 @@ class Transformer(tf.keras.Model):
     def encode(self, inputs, inputs_padding_mask, training):
         """
         :param inputs: (batch_size, inputs_seq_len)
-        :param inputs_padding_mask: (batch_size, inputs_seq_len)
+        :param inputs_padding_mask: (batch_size, 1, inputs_seq_len)
         :param training: boolean
         :return: (batch_size, inputs_seq_len, hidden_size)
         """
         with tf.name_scope('encode'):
 
+            # (batch_size, inputs_seq_len, hidden_size)
             embedded_inputs = self.inputs_embedding_softmax_layer(
                 inputs, mode='embedding'
             )
@@ -221,7 +225,8 @@ class Transformer(tf.keras.Model):
             decoder_outputs = decoder_inputs
             for n, layer in enumerate(self.decoder_layers):
 
-                with tf.name_scope('layer_%d' % n):
+                layer_name = 'layer_%d' % n
+                with tf.name_scope(layer_name):
                     decoder_outputs, _ = layer(
                         inputs=[
                             decoder_outputs,
@@ -237,7 +242,7 @@ class Transformer(tf.keras.Model):
     def predict(self, encoder_outputs, encoder_decoder_attention_mask, training):
         """
         :param encoder_outputs: (batch_size, inputs_seq_len, hidden_size)
-        :param encoder_decoder_attention_mask: (batch_size, seq_len)
+        :param encoder_decoder_attention_mask: (batch_size, 1, seq_len)
         :param training:
         :return:
         """
@@ -259,17 +264,19 @@ class Transformer(tf.keras.Model):
         )
 
         # 初始只有一个 [PAD]
-        initial_ids = tf.zeros([batch_size, 1], dtype=tf.float32)
+        # (batch_size, 1)
+        initial_ids = tf.zeros(shape=(batch_size, 1), dtype=tf.int32)
+        # 0: 未解码任何一个字符
         init_decode_len = max_decode_len if self._padded_decode else 0
         size_per_head = self._hidden_size // self._num_attention_heads
 
         cache = {
             'layer_%d' % layer: {
-                'k': tf.zeros(
+                'key': tf.zeros(
                     [batch_size, init_decode_len, self._num_attention_heads, size_per_head],
                     dtype=self._dtype
                 ),
-                'v': tf.zeros(
+                'value': tf.zeros(
                     [batch_size, init_decode_len, self._num_attention_heads, size_per_head],
                     dtype=self._dtype
                 )
@@ -301,10 +308,13 @@ class Transformer(tf.keras.Model):
         }
 
     def _get_auto_regressive_decode_fn(self, max_decode_len, training):
+        # (max_decode_len + 1, hidden_size)
         timing_signal = self.position_embedding(
             inputs=None, length=max_decode_len + 1
         )
         timing_signal = tf.cast(timing_signal, self._dtype)
+
+        # (max_decode_len, max_decode_len)
         targets_look_ahead_mask = utils.get_look_ahead_mask(
             max_decode_len,
             self._dtype
@@ -313,44 +323,44 @@ class Transformer(tf.keras.Model):
         def auto_regressive_decode_fn(ids, i, cache):
             """
             :param ids: (batch_size * beam_size, i + 1)
-            :param i:
+            :param i: 解码第一个字符的时候 i = 0
             :param cache:
             :return:
             """
+
+            # 取出前一个字符
+            # (batch_size * beam_size, 1)
             decoder_input = ids[:, -1:]
+
+            # (batch_size * beam_size, 1, hidden_size)
             decoder_input = self.targets_embedding_softmax_layer(decoder_input)
 
-            if self._padded_decode:
-                timing_signal_shape = timing_signal.shape.as_list()
-                decoder_input += tf.slice(timing_signal, [i, 0], [1, timing_signal_shape[1]])
-                mask_shape = targets_look_ahead_mask.shape.as_list()
-                self_attention_mask = tf.slice(
-                    targets_look_ahead_mask, [0, 0, i, 0],
-                    [bias_shape[0], bias_shape[1], 1, bias_shape[3]]
-                )
-            else:
-                decoder_input += timing_signal[i: i + 1]
-                self_attention_mask = targets_look_ahead_mask[:, :, i:i + 1, :i + 1]
+            # 位置编码
+            decoder_input += timing_signal[i: i + 1]
+
+            # 取出当前位置的 mask
+            self_attention_mask = targets_look_ahead_mask[i:i + 1, :i + 1]
 
             decoder_outputs = decoder_input
             for n, layer in enumerate(self.decoder_layers):
 
-                with tf.name_scope('layer_%d' % n):
+                layer_name = 'layer_%d' % n
+                layer_cache = cache[layer_name]
+                with tf.name_scope(layer_name):
                     decoder_outputs, _ = layer(
                         inputs=[
                             decoder_outputs,
                             cache.get('encoder_outputs'),
-                            inputs_padding_mask,
-                            cache.get('encoder_decoder_attention_mask')
+                            cache.get('encoder_decoder_attention_mask'),
+                            self_attention_mask
                         ],
                         training=training,
-                        cache=cache,
-                        decode_loop_step=i if self._padded_decode else None
+                        cache=layer_cache,
+                        decode_loop_step=None
                     )
-
-                logits = self.targets_embedding_softmax_layer(decoder_outputs, mode='linear')
-                logits = tf.squeeze(logits, axis=[1])
-                return logits, cache
+            logits = self.targets_embedding_softmax_layer(decoder_outputs, mode='linear')
+            logits = tf.squeeze(logits, axis=[1])
+            return logits, cache
 
         return auto_regressive_decode_fn
 

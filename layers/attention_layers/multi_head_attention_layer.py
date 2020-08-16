@@ -322,7 +322,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         :param query: (batch_size, seq_len_q, hidden_size_q)
         :param value: (batch_size, seq_len_v, hidden_size_v)
         :param key: (batch_size, seq_len_k, hidden_size_k) if not given, will use value
-        :param attention_mask: (batch_size, seq_len_q, seq_len_v)
+        :param attention_mask: (batch_size, seq_len_q or 1, seq_len_v)
         :return: [batch_size, seq_len_q, output_shape]
         """
         # 为了加快运算速度，这里使用了自定义的运算

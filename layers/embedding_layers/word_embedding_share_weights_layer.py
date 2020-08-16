@@ -67,19 +67,6 @@ class WordEmbeddingShareWeights(tf.keras.layers.Layer):
             # 返回 [batch_size, seq_len, hidden_size]
             embeddings = tf.gather(self.share_weights, inputs, axis=0)
 
-            # 因为 pad 也会被 embed 成一组数字
-            # 所以需要将本来为 padding 的位置全变为 0
-
-            # (batch_size, seq_len)
-            mask = tf.cast(tf.not_equal(inputs, 0), embeddings.dtype)
-
-            # (batch_size, seq_len, 1)
-            mask = tf.expand_dims(mask, -1)
-
-            # mask 会广播成 (batch_size, seq_len, hidden_size)
-            # 即将 0 的位置广播到整个 hidden_size 大小，实现将整个句子变为 0
-            embeddings *= mask
-
             # 根据 attention is all you need
             # 需要将 embedding 除以 sqrt(d_model)
             embeddings *= self.hidden_size ** 0.5

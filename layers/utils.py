@@ -62,6 +62,19 @@ def assert_rank(tensor, expected_rank, name=None):
         )
 
 
+def get_padding_mask(seqs, padding_value=0, dtype=tf.float32):
+    """
+    :param seqs: (batch_size, seq_len)
+    :param padding_value: 0
+    :param dtype:
+    :return: (batch_size, 1, seq_len)
+    """
+    with tf.name_scope('padding_mask'):
+        padding_mask = tf.cast(tf.equal(seqs, padding_value), dtype)
+        padding_mask = tf.expand_dims(padding_mask, axis=1)
+    return padding_mask
+
+
 def get_look_ahead_mask(length, dtype=tf.float32):
     """
     :param length: seq_len
@@ -73,16 +86,5 @@ def get_look_ahead_mask(length, dtype=tf.float32):
         return look_ahead_mask
 
 
-def get_attention_padding_mask(seqs, padding_value=0, dtype=tf.float32):
-    """
-    :param seqs: (batch_size, seq_len)
-    :param padding_value: 0
-    :param dtype:
-    :return: (batch_size, seq_len)
-    """
-    with tf.name_scope('attention_padding_mask'):
-        attention_padding_mask = tf.cast(tf.equal(seqs, padding_value), dtype)
-        # attention_padding_mask = tf.expand_dims(
-        #     tf.expand_dims(attention_padding_mask, axis=1), axis=1
-        # )
-    return attention_padding_mask
+def get_combine_mask(seqs, padding_value=0, dtype=tf.float32):
+    return tf.maximum(get_padding_mask(seqs, padding_value, dtype), get_look_ahead_mask(tf.shape(seqs)[1]))

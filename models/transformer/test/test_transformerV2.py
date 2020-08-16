@@ -43,9 +43,9 @@ class TransformerV2Test(tf.test.TestCase):
         self.assertEqual(len(inputs), 1)
         self.assertEqual(len(outputs), 2)
         self.assertEqual(inputs[0].shape.as_list(), [None, None])
-        self.assertEqual(inputs[0].dtype, tf.int64)
+        self.assertEqual(inputs[0].dtype, tf.int32)
         self.assertEqual(outputs[0].shape.as_list(), [None, None])
-        self.assertEqual(outputs[0].shape.dtype, tf.int32)
+        self.assertEqual(outputs[0].dtype, tf.int32)
         self.assertEqual(outputs[1].shape.as_list(), [None])
         self.assertEqual(outputs[1].dtype, tf.float32)
 

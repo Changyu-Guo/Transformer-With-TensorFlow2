@@ -99,7 +99,7 @@ class Transformer(tf.keras.Model):
             # 一定要在这里获取，因为 decode 或 predict 的时候不会把 inputs 传入函数
             # 因此无法在 decode 和 predict 函数里获取 inputs 的 padding_mask
             # shape: [batch_size, 1, 1, seq_len]
-            inputs_padding_mask = utils.get_attention_padding_mask(inputs)
+            inputs_padding_mask = utils.get_padding_mask(inputs)
 
             # encode
             # shape: [batch_size, seq_len, hidden_size]
