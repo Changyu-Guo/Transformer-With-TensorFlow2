@@ -9,6 +9,10 @@ from models.transformer.transformerV2 import create_model
 from models.transformer.transformer_params import PARAMS
 
 
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_visible_devices(physical_devices[1:], 'GPU')
+
+
 class TransformerV2Test(tf.test.TestCase):
 
     def setUp(self):

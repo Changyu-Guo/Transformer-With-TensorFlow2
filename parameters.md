@@ -118,12 +118,4 @@ if mask is not None:
 
 #### `train:`
 
-- `inputs -> (batch_size, seq_len)`
-
 #### `predict:`
-
-- `inputs -> (batch_size, inputs_seq_len) -> tf.int32`
-- `get_inputs_padding_mask -> (batch_size, 1, inputs_seq_len) -> tf.float32`
-- `encode`
-- `embedding_inputs -> (batch_size, seq_len, hidden_size) -> tf.float32`
-- `get position encoding -> (batch_size, seq_len, hidden_size)`
