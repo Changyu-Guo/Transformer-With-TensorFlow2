@@ -8,179 +8,145 @@ import os
 import sys
 import random
 import tarfile
+import collections
 import urllib.request
 import tensorflow as tf
 from absl import app
 from absl import logging
 from absl import flags
+from tokenizers import BertWordPieceTokenizer
 
 sys.path.append('D:\\projects\\Transformers-With-TensorFlow2')
 
 from tokenizations import sub_tokenization
 
-_PREFIX = 'wmt32k'
-_TRAIN_TAG = 'train'
-_EVAL_TAG = 'dev'
-
-_TRAIN_SHARDS = 100
-_EVAL_SHARDS = 1
-
-_TRAIN_DATA_SOURCES = [
-    {
-        'url': 'http://data.statmt.org/wmt17/translation-task/'
-               'training-parallel-nc-v12.tgz',
-        'input': 'news-commentary-v12.de-en.en',
-        'target': 'news-commentary-v12.de-en.de'
-    }
-]
-
-_TRAIN_DATA_MIN_COUNT = 6
-
-_EVAL_DATA_SOURCES = [{
-    'url': 'http://data.statmt.org/wmt17/translation-task/dev.tgz',
-    'input': 'newstest2013.en',
-    'target': 'newstest2013.de'
-}]
-
-_TEST_DATA_SOURCES = [{
-    'url': 'https://storage.googleapis.com/tf-perf-public/official_transformer/test_data/newstest2014.tgz',
-    'input': 'newstest2014.en',
-    'target': 'newstest2014.de'
-}]
-
-_TARGET_VOCAB_SIZE = 32768
-_TARGET_THRESHOLD = 327
-VOCAB_FILE = 'vocab.ende.%d' % _TARGET_VOCAB_SIZE
-
-
-def find_file(path, filename, max_depth=5):
-    for root, dirs, files in os.walk(path):
-        if filename in files:
-            return os.path.join(root, filename)
-
-        depth = root[len(path) + 1:].count(os.sep)
-
-        # 停止递归
-        if depth > max_depth:
-            del dirs[:]
-
-    return None
-
-
-def get_raw_files(raw_dir, data_source):
-    raw_files = {
-        'inputs': [],
-        'targets': []
-    }
-
-    for d in data_source:
-        input_file, target_file = download_and_extract(
-            raw_dir, d['url'], d['input'], d['target']
-        )
-
-        raw_files['inputs'].append(input_file)
-        raw_files['targets'].append(target_file)
-
-    return raw_files
-
-
-def download_report_hook(count, block_size, total_size):
-    percent = int(count * block_size * 100 / total_size)
-    print('\r%d%%' % percent + ' completed', end='\r')
-
-
-def download_from_url(path, url):
-    """
-    :param path: 文件保存路径
-    :param url: 文件下载路径
-    :return:
-    """
-
-    # 确认压缩包是否已经下载
-    filename = url.split('/')[-1]
-    found_file = find_file(path, filename, max_depth=0)
-    if found_file is None:
-        filename = os.path.join(path, filename)
-        logging.info('Downloading from %s to %s.' % (url, filename))
-        in_progress_filename = filename + '.incomplete'
-        in_progress_filename, _ = urllib.request.urlretrieve(
-            url, in_progress_filename, reporthook=download_report_hook
-        )
-        print()
-        tf.io.gfile.rename(in_progress_filename, filename)
-        return filename
-    else:
-        logging.info('Already downloaded: %s (at %s).' % (url, found_file))
-        return found_file
-
-
-def download_and_extract(path, url, input_filename, target_filename):
-    """
-    :param path: 文件下载路径（文件夹）
-    :param url: 获取压缩后的双语翻译语料的 URL
-    :param input_filename: 解压双语语料得到的输入文件
-    :param target_filename: 解压双语语料得到的输出文件
-    :return: 输入语料文件名和输出语料文件名
-    """
-
-    # 确认是否已经下载
-    input_file = find_file(path, input_filename)
-    target_file = find_file(path, target_filename)
-    if input_file and target_file:
-        logging.info('Already downloaded and extracted %s.' % url)
-        return input_file, target_file
-
-    # 语料未下载则进行下载
-    compressed_file = download_from_url(path, url)
-
-    # 解压缩
-    logging.info('Extracting %s.' % compressed_file)
-    with tarfile.open(compressed_file, 'r:gz') as corpus_tar:
-        corpus_tar.extractall(path)
-
-    input_file = find_file(path, input_filename)
-    target_file = find_file(path, target_filename)
-
-    if input_file and target_file:
-        return input_file, target_file
-
-    raise OSError(
-        'Download/extraction failed for url %s to path %s' % (url, path)
-    )
-
 
 def txt_line_iterator(path):
+    """
+        打开指定 txt 文件，每次生成一行数据
+    """
     with tf.io.gfile.GFile(path) as f:
         for line in f:
             yield line.strip()
 
 
-def compile_files(raw_dir, raw_files, tag):
+def combine_files(save_dir, files, dataset_name, dataset_type):
     """
-        将多个输入文件和输出文件组合到两个单独的文件中，方便后续处理
+        当 inputs 和 targets 存在于多个文件中时，可以使用这个函数将数据合并到一个文件内
+        save_dir: 合并后的文件存储位置
+        files: 应指定为一个字典，包含 inputs 和 targets 键，值对应的则为一个 list，包含所有待合并的文件
+               在 list 中，inputs 和 targets 必须对应
+        dataset_name: 数据集的名称，必须指定
+        dataset_type: 数据集类型，例如 train 或者 eval
+
+        步骤：
+            1. 确定合并后的文件名：dataset_name + '-' + dataset_type + '.inputs'/'.targets'
+               例如 casict-train
+            2. open 两个文件
+            3. 循环依次读取 inputs list 和 targets list 中的所有文件
+            4. 将 inputs 写入文件，将 targets 写入文件
+
     """
 
-    logging.info('Compiling files with tag %s.' % tag)
-    filename = '%s-%s' % (_PREFIX, tag)
-    input_compiled_file = os.path.join(raw_dir, filename + '.lang1')
-    target_compiled_file = os.path.join(raw_dir, filename + '.lang2')
+    inputs_combined_filename = os.path.join(save_dir, dataset_name + '-' + dataset_type + '.inputs')
+    targets_combined_filename = os.path.join(save_dir, dataset_name + '-' + dataset_type + '.targets')
 
-    with tf.io.gfile.GFile(input_compiled_file, mode='w') as input_writer:
-        with tf.io.gfile.GFile(target_compiled_file, mode='w') as target_writer:
-            for i in range(len(raw_files['inputs'])):
-                input_file = raw_files['inputs'][i]
-                target_file = raw_files['targets'][i]
+    with tf.io.gfile.GFile(inputs_combined_filename, mode='w') as f_inputs:
+        with tf.io.gfile.GFile(targets_combined_filename, mode='w') as f_targets:
+            for i in range(len(files['inputs'])):
+                inputs_file = files['inputs'][i]
+                targets_file = files['targets'][i]
 
-                logging.info('Reading files %s and %s.' % (input_file, target_file))
-                write_file(input_writer, input_file)
-                write_file(target_writer, target_file)
-    return input_compiled_file, target_compiled_file
+                for line in txt_line_iterator(inputs_file):
+                    f_inputs.write(line)
+                    f_inputs.write('\n')
+
+                for line in txt_line_iterator(targets_file):
+                    f_targets.write(line)
+                    f_targets.write('\n')
+
+    return inputs_combined_filename, targets_combined_filename
 
 
-def write_file(writer, filename):
-    for line in txt_line_iterator(filename):
-        writer.write(line)
-        writer.write('\n')
+class TranslationFeature:
+    def __init__(
+            self,
+            inputs_ids,
+            targets_ids
+    ):
+        self.inputs_ids = inputs_ids
+        self.targets_ids = targets_ids
+
+
+class FeatureWriter:
+    def __init__(self, filename):
+        self.filename = filename
+        self._writer = tf.io.TFRecordWriter(filename)
+
+    def process_feature(self, feature):
+
+        def create_int_feature(values):
+            feature = tf.train.Feature(
+                int64_list=tf.train.Int64List(values=list(values))
+            )
+            return feature
+
+        features = collections.OrderedDict()
+        features['inputs_ids'] = create_int_feature(feature.inputs_ids)
+        features['targets_ids'] = create_int_feature(feature.targets_ids)
+
+        tf_example = tf.train.Example(features=tf.train.Features(feature=features))
+        self._writer.write(tf_example.SerializeToString())
+
+    def close(self):
+        self._writer.close()
+
+
+def convert_corpus_to_features(
+        inputs_tokenizer,
+        targets_tokenizer,
+        combined_inputs_corpus,
+        combined_targets_corpus,
+        save_path,
+        dataset_name,
+        dataset_type,
+        shards
+):
+    """
+        将双语语料转为可以作为模型输入的 features
+
+        步骤：
+            1. 按照一定的规则生成 shards 个文件名，例如 casict-train-data-001-of-100.tfrecord
+            2. 实例化 shards 个 writer
+            3. 同时打开 inputs corpus 和 targets corpus
+            4. 每次读取 inputs corpus 和 targets corpus 中的一行
+            5. 使用 tokenizer 分词并转为 ids
+            6. 构造 TranslationFeature
+            7. 每个 writer 一行，依次将数据写入不同的 tfrecord 中
+    """
+    shards_len = len(str(shards))
+    template_str = '%s-%s-data-%.{}d-of-%.{}d.tfrecord'.format(shards_len, shards_len)
+    tfrecord_paths = [
+        os.path.join(
+            save_path,
+            template_str % (dataset_name, dataset_type, i, shards)
+        ) for i in range(shards)
+    ]
+
+    tfrecord_writers = [FeatureWriter(path) for path in tfrecord_paths]
+
+    for lines, (inputs_line, targets_line) in enumerate(
+            zip(
+                txt_line_iterator(combined_inputs_corpus),
+                txt_line_iterator(combined_targets_corpus)
+            )
+    ):
+        inputs_ids = inputs_tokenizer.encode(inputs_line)
+        targets_ids = targets_tokenizer.encode(targets_line, add_eos=True)
+
+        feature = TranslationFeature(inputs_ids, targets_ids)
+
+        file_write_fn(feature)
 
 
 def encode_and_save_files(
@@ -315,14 +281,6 @@ def main(_):
     make_dir(FLAGS.raw_dir)
     make_dir(FLAGS.data_dir)
 
-    logging.info('Step 1/5: Downloading test data')
-    get_raw_files(FLAGS.data_dir, _TEST_DATA_SOURCES)
-
-    logging.info('Step 2/5: Download data from source')
-    train_files = get_raw_files(FLAGS.raw_dir, _TRAIN_DATA_SOURCES)
-    eval_files = get_raw_files(FLAGS.raw_dir, _EVAL_DATA_SOURCES)
-
-    logging.info('Step 3/5: Creating sub tokenizer and building vocabulary')
     train_files_flat = train_files['inputs'] + train_files['targets']
     vocab_file = os.path.join(FLAGS.data_dir, VOCAB_FILE)
     sub_tokenizer = sub_tokenization.Subtokenizer.init_from_files(
