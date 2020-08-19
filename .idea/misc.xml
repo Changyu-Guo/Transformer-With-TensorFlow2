@@ -6,6 +6,7 @@
   <component name="ProjectPlainTextFileTypeManager">
     <file url="file://$PROJECT_DIR$/learn/sentencepiece/botchan.txt" />
     <file url="file://$PROJECT_DIR$/learn/sentencepiece/corpus.txt" />
+    <file url="file://$PROJECT_DIR$/tokenizations/vocabs/bert_base_chinese_vocab.txt" />
     <file url="file://$PROJECT_DIR$/tokenizations/vocabs/bert_large_uncased_wwm_vocab.txt" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.6" project-jdk-type="Python SDK" />

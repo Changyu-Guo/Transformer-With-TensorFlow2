@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import collections
 import tensorflow as tf
 from absl import logging
 
@@ -16,13 +17,13 @@ def _read_and_batch_from_files(
         shuffle,
         repeat
 ):
-    dataset = tf.data.Dataset.list_files(file_pattern, shuffle=shuffle)
+    dataset = tf.data.Dataset.list_files(file_pattern, shuffle=False)
 
     dataset = dataset.interleave(
         lambda filename: tf.data.TFRecordDataset(
             filename,
             compression_type=None,
-            buffer_size=None,
+            buffer_size=8 * 1000 * 1024,
             num_parallel_reads=tf.data.experimental.AUTOTUNE
         ),
         cycle_length=8,
@@ -33,13 +34,12 @@ def _read_and_batch_from_files(
 
     def _parse_example(example):
         data_fields = {
-            'inputs': tf.io.VarLenFeature(tf.int64),
-            'targets': tf.io.VarLenFeature(tf.int64)
+            'inputs_ids': tf.io.VarLenFeature(tf.int64),
+            'targets_ids': tf.io.VarLenFeature(tf.int64)
         }
         parsed = tf.io.parse_single_example(example, data_fields)
-
-        inputs = tf.sparse.to_dense(parsed['inputs'])
-        targets = tf.sparse.to_dense(parsed['targets'])
+        inputs = tf.sparse.to_dense(parsed['inputs_ids'])
+        targets = tf.sparse.to_dense(parsed['targets_ids'])
 
         return inputs, targets
 
@@ -58,7 +58,7 @@ def _read_and_batch_from_files(
     dataset = dataset.padded_batch(
         batch_size=batch_size,
         padded_shapes=([max_seq_len], [max_seq_len]),
-        padding_values=([0], [0]),
+        padding_values=(tf.cast(0, tf.int64), tf.cast(0, tf.int64)),
         drop_remainder=True
     )
     if repeat:
@@ -88,3 +88,20 @@ def get_eval_dataset(params):
         shuffle=False,
         repeat=False
     )
+
+
+def main():
+    params = collections.OrderedDict(
+        data_dir='D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende\\records',
+        batch_size=2,
+        max_seq_len=8,
+        repeat_dataset=False
+    )
+    dataset = get_train_dataset(params)
+    for data in dataset:
+        print(data[0])
+        break
+
+
+if __name__ == '__main__':
+    main()

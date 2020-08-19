@@ -87,7 +87,7 @@ class FeatureWriter:
 
         def create_int_feature(values):
             feature = tf.train.Feature(
-                int64_list=tf.train.Int64List(values=list(values))
+                int64_list=tf.train.Int64List(value=list(values))
             )
             return feature
 
@@ -117,208 +117,90 @@ def convert_corpus_to_features(
 
         步骤：
             1. 按照一定的规则生成 shards 个文件名，例如 casict-train-data-001-of-100.tfrecord
-            2. 实例化 shards 个 writer
-            3. 同时打开 inputs corpus 和 targets corpus
-            4. 每次读取 inputs corpus 和 targets corpus 中的一行
-            5. 使用 tokenizer 分词并转为 ids
-            6. 构造 TranslationFeature
-            7. 每个 writer 一行，依次将数据写入不同的 tfrecord 中
+            2. 判断文件是否存在，如果存在，直接返回，如果不存在，执行接下来的步骤
+            3. 实例化 shards 个 writer
+            4. 同时打开 inputs corpus 和 targets corpus
+            5. 每次读取 inputs corpus 和 targets corpus 中的一行
+            6. 使用 tokenizer 分词并转为 ids
+            7. 构造 TranslationFeature
+            8. 每个 writer 一行，依次将数据写入不同的 tfrecord 中
     """
     shards_len = len(str(shards))
     template_str = '%s-%s-data-%.{}d-of-%.{}d.tfrecord'.format(shards_len, shards_len)
     tfrecord_paths = [
         os.path.join(
             save_path,
-            template_str % (dataset_name, dataset_type, i, shards)
+            template_str % (dataset_name, dataset_type, i + 1, shards)
         ) for i in range(shards)
     ]
 
-    tfrecord_writers = [FeatureWriter(path) for path in tfrecord_paths]
+    all_exist = True
+    for path in tfrecord_paths:
+        if not tf.io.gfile.exists(path):
+            all_exist = False
+            break
+    if all_exist:
+        return tfrecord_paths
 
+    incomplete_tfrecord_paths = [path + '.incomplete' for path in tfrecord_paths]
+
+    tfrecord_writers = [FeatureWriter(path) for path in incomplete_tfrecord_paths]
+
+    shard = 0
     for lines, (inputs_line, targets_line) in enumerate(
             zip(
                 txt_line_iterator(combined_inputs_corpus),
                 txt_line_iterator(combined_targets_corpus)
             )
     ):
-        inputs_ids = inputs_tokenizer.encode(inputs_line)
-        targets_ids = targets_tokenizer.encode(targets_line, add_eos=True)
+        inputs_ids = inputs_tokenizer.encode(inputs_line, add_special_tokens=False).ids
+        targets_ids = targets_tokenizer.encode(targets_line, add_special_tokens=False).ids
+        inputs_ids += [inputs_tokenizer.token_to_id('[SEP]')]
+        targets_ids = [targets_tokenizer.token_to_id('[CLS]')] + targets_ids + [targets_tokenizer.token_to_id('[SEP]')]
 
         feature = TranslationFeature(inputs_ids, targets_ids)
 
-        file_write_fn(feature)
+        tfrecord_writers[shard].process_feature(feature)
+        shard = (shard + 1) % shards
 
+        if lines > 0 and lines % 1000 == 0:
+            logging.info('process {} lines'.format(lines))
 
-def encode_and_save_files(
-        sub_tokenizer_lang_input,
-        sub_tokenizer_lang_target,
-        data_dir,
-        raw_files,
-        tag,
-        total_shards
-):
-    """
-    :param sub_tokenizer_lang_input: 对输入语料进行分词并转为 ids
-    :param sub_tokenizer_lang_target: 对输出语料进行分词并转为 ids
-    :param data_dir: 处理后得到的 TFRecord 存储的位置
-    :param raw_files: (input_file, target_file)
-    :param tag:
-    :param total_shards:
-    :return:
-    """
-
-    # 根据 total_shards 获取多个文件名
-    filepaths = [shard_filename(data_dir, tag, n + 1, total_shards)
-                 for n in range(total_shards)]
-    if all_exist(filepaths):
-        logging.info('Files with tag %s already exist.' % tag)
-        return filepaths
-    logging.info('Saving files with tag %s.' % tag)
-    input_file = raw_files[0]
-    target_file = raw_files[1]
-
-    tmp_filepaths = [fname + '.incomplete' for fname in filepaths]
-    writers = [tf.io.TFRecordWriter(fname) for fname in tmp_filepaths]
-    counter, shard = 0, 0
-    for counter, (input_line, target_line) in enumerate(
-            zip(
-                txt_line_iterator(input_file), txt_line_iterator(target_file)
-            )
-    ):
-        if counter > 0 and counter % 100000 == 0:
-            logging.info('\tSaving case %d.' % counter)
-
-        example = dict_to_example(
-            {
-                'inputs': sub_tokenizer_lang_input.encode(input_line, add_eos=True),
-                'targets': sub_tokenizer_lang_target.encode(target_line, add_eos=True)
-            }
-        )
-        writers[shard].write(example.SerializeToString())
-        shard = (shard + 1) % total_shards
-
-    for writer in writers:
+    for writer in tfrecord_writers:
         writer.close()
 
-    for tmp_name, final_name in zip(tmp_filepaths, filepaths):
-        tf.io.gfile.rename(tmp_name, final_name)
+    for incomplete_path, path in zip(incomplete_tfrecord_paths, tfrecord_paths):
+        tf.io.gfile.rename(incomplete_path, path)
 
-    logging.info('Saving %d Examples', counter + 1)
-
-    return filepaths
+    return tfrecord_paths
 
 
-def shard_filename(path, tag, shard_num, total_shards):
-    return os.path.join(
-        path, '%s-%s-%.5d-od-%.5d' % (_PREFIX, tag, shard_num, total_shards)
+def main():
+    save_path = 'D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende\\records'
+    tf.io.gfile.makedirs(save_path)
+    train_inputs_file = 'D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende\\training\\news' \
+                        '-commentary-v12.zh-en.zh'
+    train_targets_file = 'D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende\\training\\news' \
+                         '-commentary-v12.zh-en.en'
+    inputs_vocab_file = 'D:\\projects\\Transformers-With-TensorFlow2\\tokenizations\\vocabs\\bert_base_chinese_vocab' \
+                        '.txt'
+    targets_vocab_file = 'D:\\projects\\Transformers-With-TensorFlow2\\tokenizations\\vocabs' \
+                         '\\bert_large_uncased_wwm_vocab.txt'
+    inputs_tokenizer = BertWordPieceTokenizer(vocab_file=inputs_vocab_file)
+    targets_tokenizer = BertWordPieceTokenizer(vocab_file=targets_vocab_file)
+
+    convert_corpus_to_features(
+        inputs_tokenizer,
+        targets_tokenizer,
+        train_inputs_file,
+        train_targets_file,
+        save_path=save_path,
+        dataset_name='newstest',
+        dataset_type='train',
+        shards=10
     )
-
-
-def all_exist(filepaths):
-    for fname in filepaths:
-        if not tf.io.gfile.exists(fname):
-            return False
-    return True
-
-
-def shuffle_records(fname):
-    logging.info('Shuffling records in file %s' % fname)
-
-    tmp_fname = fname + '.unshuffled'
-    tf.io.gfile.rename(fname, tmp_fname)
-
-    reader = tf.data.TFRecordDataset(tmp_fname)
-    records = []
-    for record in reader:
-        records.append(record)
-        if len(records) % 100000 == 0:
-            logging.info('\tRead: %d', len(records))
-
-    random.shuffle(records)
-
-    with tf.io.TFRecordWriter(fname) as w:
-        for count, record in enumerate(records):
-            w.write(record)
-            if count > 0 and count % 100000 == 0:
-                logging.info('\tWriting record: %d', count)
-
-    tf.io.gfile.remove(tmp_fname)
-
-
-def dict_to_example(dictionary):
-    features = {}
-    for k, v in dictionary.items():
-        features[k] = tf.train.Feature(
-            int64_list=tf.train.Int64List(value=v)
-        )
-    return tf.train.Example(features=tf.train.Features(feature=features))
-
-
-def make_dir(path):
-    if not tf.io.gfile.exists(path):
-        tf.io.gfile.makedirs(path)
-
-
-def define_processor_flags():
-    flags.DEFINE_string(
-        name='data_dir',
-        default='D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende',
-        help=''
-    )
-    flags.DEFINE_string(
-        name='raw_dir',
-        default='D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende_raw',
-        help=''
-    )
-    flags.DEFINE_bool(
-        name='search',
-        default=False,
-        help=''
-    )
-
-
-def main(_):
-    make_dir(FLAGS.raw_dir)
-    make_dir(FLAGS.data_dir)
-
-    train_files_flat = train_files['inputs'] + train_files['targets']
-    vocab_file = os.path.join(FLAGS.data_dir, VOCAB_FILE)
-    sub_tokenizer = sub_tokenization.Subtokenizer.init_from_files(
-        vocab_file,
-        train_files_flat,
-        _TARGET_VOCAB_SIZE,
-        _TARGET_THRESHOLD,
-        min_count=None if FLAGS.search else _TRAIN_DATA_MIN_COUNT
-    )
-
-    logging.info('Step 4/5: Compiling training and evaluation data')
-    compiled_train_files = compile_files(FLAGS.raw_dir, train_files, _TRAIN_TAG)
-    compiled_eval_files = compile_files(FLAGS.raw_dir, eval_files, _EVAL_TAG)
-
-    logging.info('Step 5/5: Preprocessing and saving data')
-    train_tfrecord_files = encode_and_save_files(
-        sub_tokenizer,
-        sub_tokenizer,
-        FLAGS.data_dir,
-        compiled_train_files,
-        _TRAIN_TAG,
-        _TRAIN_SHARDS
-    )
-    encode_and_save_files(
-        sub_tokenizer,
-        sub_tokenizer,
-        FLAGS.data_dir,
-        compiled_eval_files,
-        _EVAL_TAG,
-        _EVAL_SHARDS
-    )
-
-    # for fname in train_tfrecord_files:
-    #     shuffle_records(fname)
 
 
 if __name__ == '__main__':
     logging.set_verbosity(logging.INFO)
-    define_processor_flags()
-    FLAGS = flags.FLAGS
-    app.run(main)
+    main()
