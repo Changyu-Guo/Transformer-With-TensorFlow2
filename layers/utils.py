@@ -83,7 +83,7 @@ def get_look_ahead_mask(length, dtype=tf.float32):
     """
     with tf.name_scope('look_ahead_mask'):
         look_ahead_mask = 1 - tf.linalg.band_part(tf.ones([length, length], dtype=dtype), -1, 0)
-        return look_ahead_mask
+        return look_ahead_mask[tf.newaxis, :, :]
 
 
 def get_combine_mask(seqs, padding_value=0, dtype=tf.float32):

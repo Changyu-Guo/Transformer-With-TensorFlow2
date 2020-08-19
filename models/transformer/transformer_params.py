@@ -1,6 +1,7 @@
 # -*- coding: utf - 8 -*-
 
 from collections import defaultdict
+import tensorflow as tf
 
 PARAMS = defaultdict(
     lambda: None,
@@ -11,8 +12,8 @@ PARAMS = defaultdict(
     max_seq_len=256,
 
     # model
-    inputs_vocab_size=100,
-    targets_vocab_size=100,
+    inputs_vocab_size=21128,
+    targets_vocab_size=30522,
     hidden_size=512,
     num_hidden_layers=6,
     num_attention_heads=8,
@@ -21,6 +22,7 @@ PARAMS = defaultdict(
     use_bias=True,
     norm_first=False,
     norm_epsilon=0,
+    dtype=tf.float32,
 
     # dropout
     hidden_dropout_rate=0.1,
@@ -36,6 +38,7 @@ PARAMS = defaultdict(
     optimizer_adam_beta_1=0.9,
     optimizer_adam_beta_2=0.997,
     optimizer_adam_epsilon=1e-9,
+    warmup_steps=10,
 
     # decode
     extra_decode_len=50,

@@ -11,7 +11,6 @@ from layers.transformer_layers import encoder_layer, decoder_layer
 from layers.feed_forward_layers import feed_forward_net_layer
 from metrics import transformer_metrics as metrics
 from ops import beam_search
-from tokenizations.sub_tokenization import EOS_ID
 from layers import utils
 
 

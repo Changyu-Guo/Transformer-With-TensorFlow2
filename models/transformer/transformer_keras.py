@@ -8,25 +8,14 @@ import os
 import tensorflow as tf
 from absl import flags
 from absl import logging
+from absl import app
 from models.transformer import transformerV2
 from models.transformer.transformer_params import PARAMS
 from optimizations.schedules import WarmupSchedule
 from metrics import transformer_metrics
 from models.transformer import input_pipeline
 from utils import distrib_utils
-from tokenizations import sub_tokenization
-
-
-def evaluate_and_log_bleu(
-        model,
-        params,
-        bleu_source,
-        bleu_ref,
-        targets_vocab_file,
-        distribution_strategy=None
-):
-    sub_tokenize = sub_tokenization.Subtokenizer(targets_vocab_file)
-    uncased_score, cased_score = None
+from tokenizers import BertWordPieceTokenizer
 
 
 def get_model_params():
@@ -50,8 +39,8 @@ class TransformerTask:
         params['repeat_dataset'] = None
         params["enable_tensorboard"] = flags_obj.enable_tensorboard
         params["enable_metrics_in_training"] = flags_obj.enable_metrics_in_training
-        params["steps_between_evaluates"] = flags_obj.steps_between_evals
-        params["enable_checkpointing"] = flags_obj.enable_checkpointing
+        params["steps_between_evaluates"] = flags_obj.steps_between_evaluates
+        params["enable_checkpoint"] = flags_obj.enable_checkpoint
 
         self.distribution_strategy = distrib_utils.get_distribution_strategy(
             distribution_strategy=flags_obj.distribution_strategy,
@@ -93,18 +82,22 @@ class TransformerTask:
 
             model.compile(optimizer)
 
-        model.summary()
+        # model.summary()
 
         train_dataset = input_pipeline.get_train_dataset(params)
+        train_dataset = train_dataset.map(
+            input_pipeline.map_data_to_transformer_fn,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
 
         callbacks = self._create_callbacks()
 
-        cased_score, uncased_score = None, None
-        cased_score_history, uncased_score_history = [], []
+        # cased_score, uncased_score = None, None
+        # cased_score_history, uncased_score_history = [], []
         while current_step < flags_obj.train_steps:
             remaining_steps = flags_obj.train_steps - current_step
             train_steps_per_eval = (
-                remaining_steps if remaining_steps < flags_obj.steps_between_evals
+                remaining_steps if remaining_steps < flags_obj.steps_between_evaluates
                 else flags_obj.steps_between_evaluates
             )
             current_iteration = current_step // flags_obj.steps_between_evaluates
@@ -114,20 +107,15 @@ class TransformerTask:
             history = model.fit(
                 train_dataset,
                 initial_epoch=current_iteration,
-                epochs=iteration + 1,
+                epochs=current_iteration + 1,
                 steps_per_epoch=train_steps_per_eval,
                 callbacks=callbacks,
                 verbose=1
             )
-            current_step += train_steps_per_evaluate
+            current_step += train_steps_per_eval
             logging.info('Train history: {}'.format(history.history))
 
             logging.info('End train iteration at global step: {}'.format(current_step))
-
-            if flags_obj.bleu_score and flags_obj.bleu_ref:
-                uncased_score, cased_score = self.eval()
-                cased_score_history.append([current_iteration + 1, cased_score])
-                uncased_score_history.append([current_iteration + 1, uncased_score])
 
     def eval(self):
         with distrib_utils.get_strategy_scope(self.distribution_strategy):
@@ -157,7 +145,7 @@ class TransformerTask:
             params['warmup_steps']
         )
         optimizer = tf.keras.optimizers.Adam(
-            lr=lr_schedule,
+            learning_rate=lr_schedule,
             beta_1=params['optimizer_adam_beta_1'],
             beta_2=params['optimizer_adam_beta_2'],
             epsilon=params['optimizer_adam_epsilon']
@@ -171,8 +159,8 @@ class TransformerTask:
                 log_dir=self.flags_obj.model_dir
             )
             callbacks.append(tensorboard_callback)
-        if self.flags_obj.enable_checkpointing:
-            ckpt_full_path = os.path.join(self.flags_obj.model_dir, 'checkpoint-{04d}.ckpt')
+        if self.flags_obj.enable_checkpoint:
+            ckpt_full_path = os.path.join(self.flags_obj.model_dir, 'checkpoint-{epoch:04d}.ckpt')
             checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
                 ckpt_full_path, save_weights_only=True
             )
@@ -202,7 +190,7 @@ def define_transformer_flags():
     )
     flags.DEFINE_string(
         name='model_dir',
-        default='./models',
+        default='D:\\projects\\Transformers-With-TensorFlow2\\models\\transformer\\models',
         help='Path to save checkpoint files'
     )
     flags.DEFINE_boolean(
@@ -219,7 +207,7 @@ def define_transformer_flags():
     )
     flags.DEFINE_integer(
         name='train_epochs',
-        default=1,
+        default=3,
         help='train epochs'
     )
     flags.DEFINE_integer(
@@ -229,32 +217,29 @@ def define_transformer_flags():
     )
     flags.DEFINE_integer(
         name='train_steps',
-        default=300000,
+        default=30,
         help='train steps'
     )
     flags.DEFINE_integer(
         name='steps_between_evaluates',
-        default=5000,
+        default=5,
         help='steps between evaluates'
     )
     flags.DEFINE_integer(
         name='validation_steps',
-        default=64,
+        default=6,
         help='validation steps'
-    )
-    flags.DEFINE_integer(
-        name=''
     )
 
     # data
     flags.DEFINE_string(
         name='data_dir',
-        default='./data',
+        default='D:\\projects\\Transformers-With-TensorFlow2\\datasets\\translate_ende\\records',
         help='data dir'
     )
     flags.DEFINE_integer(
         name='batch_size',
-        default=32,
+        default=2,
         help='global batch size'
     )
     flags.DEFINE_boolean(
@@ -264,7 +249,7 @@ def define_transformer_flags():
     )
     flags.DEFINE_integer(
         name='max_seq_len',
-        default=256,
+        default=64,
         help='max seq len'
     )
     flags.DEFINE_integer(
@@ -281,7 +266,7 @@ def define_transformer_flags():
     # distribution
     flags.DEFINE_string(
         name='distribution_strategy',
-        default='mirrored',
+        default='one_device',
         help='distribution strategy'
     )
     flags.DEFINE_integer(
@@ -334,14 +319,27 @@ def define_transformer_flags():
     # vocab
     flags.DEFINE_string(
         name='inputs_vocab_file',
-        default=None,
+        default='D:\\projects\\Transformers-With-TensorFlow2\\tokenizations\\vocabs\\bert_base_chinese_vocab.txt',
         help='vocab file for inputs'
     )
     flags.DEFINE_string(
         name='targets_vocab_file',
-        default=None,
+        default='D:\\projects\\Transformers-With-TensorFlow2\\tokenizations\\vocabs\\bert_large_uncased_wwm_vocab.txt',
         help='vocab file for targets'
     )
 
 
+def main(_):
+    flags_obj = flags.FLAGS
+    task = TransformerTask(flags_obj)
 
+    if flags_obj.mode == 'train':
+        task.train()
+    else:
+        raise ValueError('Invalid mode {}'.format(flags_obj.mode))
+
+
+if __name__ == '__main__':
+    logging.set_verbosity(logging.INFO)
+    define_transformer_flags()
+    app.run(main)

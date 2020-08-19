@@ -105,13 +105,13 @@ def get_distribution_strategy(
     # 单机单卡
     if distribution_strategy == 'one_device':
         if num_gpus == 0:
-            return tf.distribute.OneDeviceStrategy('device:CPU:0')
+            return tf.distribute.OneDeviceStrategy('/device:CPU:0')
         if num_gpus > 1:
             raise ValueError(
                 'OneDeviceStrategy can not be used for more than '
                 'one device'
             )
-        return tf.distribute.OneDeviceStrategy('device:GPU:0')
+        return tf.distribute.OneDeviceStrategy(device='/gpu:0')
 
     # 异步训练
     if distribution_strategy == 'parameter_server':
@@ -126,7 +126,7 @@ def get_strategy_scope(strategy):
     if strategy:
         strategy_scope = strategy.scope()
     else:
-        strategy_scope = None
+        strategy_scope = DummyContextManager()
 
     return strategy_scope
 

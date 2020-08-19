@@ -61,6 +61,8 @@ def _read_and_batch_from_files(
         padding_values=(tf.cast(0, tf.int64), tf.cast(0, tf.int64)),
         drop_remainder=True
     )
+    if shuffle:
+        dataset = dataset.shuffle(2020)
     if repeat:
         dataset = dataset.repeat()
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
@@ -88,6 +90,10 @@ def get_eval_dataset(params):
         shuffle=False,
         repeat=False
     )
+
+
+def map_data_to_transformer_fn(x, y):
+    return ((x, y),)
 
 
 def main():
