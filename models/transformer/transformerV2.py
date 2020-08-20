@@ -17,8 +17,8 @@ from layers import utils
 def create_model(params, is_train):
     with tf.name_scope('model'):
         if is_train:
-            inputs = tf.keras.layers.Input((None,), dtype=tf.int64, name='inputs')
-            targets = tf.keras.layers.Input((None,), dtype=tf.int64, name='targets')
+            inputs = tf.keras.layers.Input((None,), dtype=tf.int64, name='inputs_ids')
+            targets = tf.keras.layers.Input((None,), dtype=tf.int64, name='targets_ids')
             static_model = Transformer(
                 params,
                 name='transformer_v2'

@@ -137,3 +137,6 @@ datasets
 
 # vocab
 datasets/vocab.txt
+
+# checkpoint
+learn/tf_guide/tmp
