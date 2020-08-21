@@ -41,3 +41,19 @@ model({
     'inputs_ids': inputs_ids,
     'targets_ids': targets_ids
 })
+
+
+class Net(tf.keras.Model):
+
+    def __init__(self):
+        super(Net, self).__init__()
+
+    def build(self, input_shape):
+        self.dense = tf.keras.layers.Dense(5)
+
+    def call(self, x):
+        return self.dense(x)
+
+
+net = Net()
+print(net(tf.ones(shape=(1, 5))))
