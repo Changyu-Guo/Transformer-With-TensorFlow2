@@ -58,7 +58,8 @@ def get_combine_mask(seqs, padding_value):
     )
 ```
 
-> 在 `Attention Mask` 中，`True / 1` 表示是`PAD`，`False / 0` 表示不是`PAD`
+> 在 `Attention Mask` 中，`True / 1` 表示是`PAD`，`False / 0` 表示不是`PAD`，或者称 `1
+>` 是被 `mask` 的地方
 
 而在`softmax`时应该进行如下运算：
 

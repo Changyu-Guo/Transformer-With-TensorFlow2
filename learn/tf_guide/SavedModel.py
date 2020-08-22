@@ -9,6 +9,4 @@ logging.set_verbosity(logging.INFO)
 
 tempdir = tempfile.mkdtemp()
 
-file = tf.keras.utils.get_file(
-
-)
+file = tf.keras.utils.get_file()
