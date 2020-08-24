@@ -401,6 +401,59 @@
 
 ### 案例
 
+#### `Base` 镜像
+
+`FROM scratch`
+
+#### 自定义镜像 `mycentos`
+
+```dockerfile
+from centos
+
+ENV mypath /tmp
+WORKDIR $mypath
+
+RUN yum -y install vim
+RUN yum -y install net-tools
+
+EXPOSE 80
+CMD /bin/bash
+```
+
+`docker build -f /mydocker/DockerFile -t mycentos:1.3 .`
+
+`docker run -it mycentos:1.3`
+
+#### `CMD/ENTRYPOINT` 镜像案例
+
+无
+
+#### 自定义镜像 `Tomcat9`
+
+```dockerfile
+FROM centos
+MAINTAINER Guo Changyu<1028677200@qq.com>
+
+COPY c.txt /usr/local/cincontainer.txt
+
+ADD jdk-8u171-linux-x64.tar.gz /use/local
+ADD apache-tomcat-9.0.8.tar.gz /usr/local
+
+RUN yum -y install vim
+
+ENV MYPATH /usr/local
+WORKDIR $MYPATH
+
+ENV JAVA_HOME /usr/local/jdk1.8.0_171
+ENV CLASSPATH $JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+ENV CATALINA_HOME /usr/local/apache-tomcat-9.0.8
+ENV CATALINA_BASE /usr/local/apache-tomcat-9.0.8
+ENV PATH $PATH:$JAVA_HOME/bin:$CATALINA_HOME/lib:$CATALINA_HOME/bin
+
+EXPOSE 8080
+
+```
+
 
 
 ## 七、`Docker` 常用安装
