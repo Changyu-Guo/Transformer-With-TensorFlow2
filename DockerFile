@@ -1,0 +1,7 @@
+FROM tensorflow/tensorflow:2.3.0-gpu
+
+ADD . /
+
+WORKDIR /
+
+CMD ["/bin/bash"]

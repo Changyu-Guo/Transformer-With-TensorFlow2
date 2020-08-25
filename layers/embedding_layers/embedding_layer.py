@@ -1,11 +1,9 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+# -*- coding: utf - 8 -*-
 
 import tensorflow as tf
 
 
-class OnDeviceEmbedding(tf.keras.layers.Layer):
+class Embedding(tf.keras.layers.Layer):
     def __init__(
             self,
             vocab_size,
@@ -15,7 +13,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             use_scale=False,
             **kwargs
     ):
-        super(OnDeviceEmbedding, self).__init__(**kwargs)
+        super(Embedding, self).__init__(**kwargs)
         self._vocab_size = vocab_size
         self._embedding_size = embedding_size
         self._initializer = initializer
@@ -30,7 +28,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             'use_one_hot': self._use_one_hot,
             'use_scale': self._use_scale
         }
-        base_config = super(OnDeviceEmbedding, self).get_config()
+        base_config = super(Embedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def build(self, input_shape):
@@ -40,7 +38,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             initializer=self._initializer,
             dtype=tf.float32
         )
-        super(OnDeviceEmbedding, self).build(input_shape)
+        super(Embedding, self).build(input_shape)
 
     def call(self, inputs):
         # 将 inputs 展平

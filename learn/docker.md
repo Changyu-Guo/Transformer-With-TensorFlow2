@@ -399,6 +399,15 @@
 
 当构建一个被继承的 `DockerFile` 时运行命令，父镜像在被子镜像继承后父镜像的 `onbuild` 被触发
 
+#### `docker build`
+
+执行 `DockerFile`
+
+**`OPTIONS`：**
+
+- `-f`：选择文件，如果不执行，则默认为当前目录
+- `-t / --tag`：镜像标签
+
 ### 案例
 
 #### `Base` 镜像
@@ -430,6 +439,8 @@ CMD /bin/bash
 
 #### 自定义镜像 `Tomcat9`
 
+**编写 `DockerFile`**
+
 ```dockerfile
 FROM centos
 MAINTAINER Guo Changyu<1028677200@qq.com>
@@ -452,10 +463,9 @@ ENV PATH $PATH:$JAVA_HOME/bin:$CATALINA_HOME/lib:$CATALINA_HOME/bin
 
 EXPOSE 8080
 
+ENTRYPOINT ["/usr/local/apache-tomcat-9.0.8/bin/startup.sh"]
 ```
 
+**构建：**
 
-
-## 七、`Docker` 常用安装
-
-## 八、本地镜像发布到阿里云
+**启动：**

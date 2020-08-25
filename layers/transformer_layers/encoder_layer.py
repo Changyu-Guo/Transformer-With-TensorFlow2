@@ -34,6 +34,9 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             intermediate_activation,
             hidden_dropout_rate=0.0,
             attention_dropout_rate=0.0,
+            use_bias=True,
+            norm_first=False,
+            norm_epsilon=1e-12,
             kernel_initializer='glorot_uniform',
             bias_initializer='zeros',
             kernel_regularizer=None,
@@ -41,9 +44,6 @@ class TransformerEncoderLayer(tf.keras.layers.Layer):
             activity_regularizer=None,
             kernel_constraint=None,
             bias_constraint=None,
-            use_bias=True,
-            norm_first=False,
-            norm_epsilon=1e-12,
             **kwargs
     ):
         super(TransformerEncoderLayer, self).__init__(**kwargs)

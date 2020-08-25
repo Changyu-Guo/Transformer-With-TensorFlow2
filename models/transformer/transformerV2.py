@@ -6,7 +6,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 from layers.embedding_layers.word_embedding_share_weights_layer import WordEmbeddingShareWeights
-from layers.embedding_layers.relative_position_embedding_layer import RelativePositionEmbedding
+from layers.embedding_layers.transformer_position_embedding_layer import TransformerPositionEmbedding
 from layers.transformer_layers import encoder_layer, decoder_layer
 from layers.feed_forward_layers import feed_forward_net_layer
 from metrics import transformer_metrics as metrics
@@ -83,7 +83,7 @@ class Transformer(tf.keras.Model):
         self.targets_embedding_softmax_layer = WordEmbeddingShareWeights(
             vocab_size=self._targets_vocab_size, hidden_size=self._hidden_size
         )
-        self.position_embedding = RelativePositionEmbedding(
+        self.position_embedding = TransformerPositionEmbedding(
             hidden_size=self._hidden_size
         )
 
@@ -308,12 +308,15 @@ class Transformer(tf.keras.Model):
 
     def _get_auto_regressive_decode_fn(self, max_decode_len, training):
         # (max_decode_len + 1, hidden_size)
-        timing_signal = self.position_embedding(
+        # +1 是因为有 BOS
+        # 会在整个解码的过程中用到，解码第 i 个 word 的时候用第 i 个
+        position_embeddings = self.position_embedding(
             inputs=None, length=max_decode_len + 1
         )
-        timing_signal = tf.cast(timing_signal, self._dtype)
+        position_embeddings = tf.cast(position_embeddings, self._dtype)
 
-        # (max_decode_len, max_decode_len)
+        # (1, max_decode_len, max_decode_len)
+        # 会在整个解码的过程中用到
         targets_look_ahead_mask = utils.get_look_ahead_mask(
             max_decode_len,
             self._dtype
@@ -338,7 +341,7 @@ class Transformer(tf.keras.Model):
             decoder_input += timing_signal[i: i + 1]
 
             # 取出当前位置的 mask
-            self_attention_mask = targets_look_ahead_mask[i:i + 1, :i + 1]
+            self_attention_mask = targets_look_ahead_mask[0, i:i + 1, :i + 1]
 
             decoder_outputs = decoder_input
             for n, layer in enumerate(self.decoder_layers):

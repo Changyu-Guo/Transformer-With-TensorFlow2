@@ -1,15 +1,11 @@
 # -*- coding: utf - 8 -*-
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import math
 import tensorflow as tf
 from layers import utils
 
 
-class RelativePositionEmbedding(tf.keras.layers.Layer):
+class TransformerPositionEmbedding(tf.keras.layers.Layer):
     """Attention is all you need.
         PE(pos, 2i) = sin(pos / 10000^(2i / d_model))
         PE(pos, 2i+1) = cos(pos / 10000^(2i / d_model))
@@ -36,7 +32,7 @@ class RelativePositionEmbedding(tf.keras.layers.Layer):
         if 'dtype' not in kwargs:
             kwargs['dtype'] = 'float32'
 
-        super(RelativePositionEmbedding, self).__init__(**kwargs)
+        super(TransformerPositionEmbedding, self).__init__(**kwargs)
         self._hidden_size = hidden_size
         self._min_timescale = min_timescale
         self._max_timescale = max_timescale
@@ -47,7 +43,7 @@ class RelativePositionEmbedding(tf.keras.layers.Layer):
             'min_timescale': self._min_timescale,
             'max_timescale': self._max_timescale
         }
-        base_config = super(RelativePositionEmbedding, self).get_config()
+        base_config = super(TransformerPositionEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def call(self, inputs, length=None):
