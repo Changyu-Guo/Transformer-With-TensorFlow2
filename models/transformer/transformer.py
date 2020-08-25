@@ -2,7 +2,7 @@
 
 import math
 import tensorflow as tf
-from layers.embedding_layers import embedding_layer
+from layers.embedding_layers import word_embedding_layer
 
 
 class Transformer(tf.keras.Model):

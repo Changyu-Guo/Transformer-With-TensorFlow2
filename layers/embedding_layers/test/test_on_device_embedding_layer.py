@@ -6,14 +6,14 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from layers.embedding_layers import embedding_layer
+from layers.embedding_layers import word_embedding_layer
 
 
 class OnDeviceEmbeddingTest(tf.test.TestCase):
     def test_layer_creation(self):
         vocab_size = 31
         embedding_size = 27
-        test_layer = embedding_layer.Embedding(
+        test_layer = word_embedding_layer.WordEmbedding(
             vocab_size=vocab_size, embedding_size=embedding_size
         )
         seq_len = 23

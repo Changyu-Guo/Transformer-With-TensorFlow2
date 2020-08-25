@@ -5,8 +5,8 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from layers.embedding_layers.embedding_layer import Embedding
-from layers.embedding_layers.bert_embedding_layer import BertPositionEmbedding
+from layers.embedding_layers.word_embedding_layer import WordEmbedding
+from layers.embedding_layers.bert_position_embedding_layer import BertPositionEmbedding
 from layers.transformer_layers.encoder_layer import TransformerEncoderLayer
 from layers.attention_layers.self_attention_mask import SelfAttentionMask
 from layers.attention_layers.einsum_dense import EinsumDense
@@ -75,7 +75,7 @@ class BertEncoder(tf.keras.Model):
         if embedding_size is None:
             embedding_size = hidden_size
         if embedding_layer is None:
-            self._embedding_layer = Embedding(
+            self._embedding_layer = WordEmbedding(
                 vocab_size=vocab_size,
                 embedding_size=embedding_size,
                 initializer=initializer,
@@ -97,7 +97,7 @@ class BertEncoder(tf.keras.Model):
         position_embeddings = self._position_embedding_layer(word_embeddings)
 
         # type embedding
-        self._type_embedding_layer = Embedding(
+        self._type_embedding_layer = WordEmbedding(
             vocab_size=vocab_size,
             embedding_size=embedding_size,
             initializer=initializer,
