@@ -5,13 +5,15 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from layers.embedding_layers.word_embedding_share_weights_layer import WordEmbeddingShareWeights
+from layers.embedding_layers.word_embedding_layer import WordEmbedding
 from layers.embedding_layers.transformer_position_embedding_layer import TransformerPositionEmbedding
 from layers.transformer_layers import encoder_layer, decoder_layer
 from layers.feed_forward_layers import feed_forward_net_layer
 from metrics import transformer_metrics as metrics
 from ops import beam_search
 from layers import utils
+
+EOS_ID = 1
 
 
 def create_model(params, is_train):
@@ -77,11 +79,11 @@ class Transformer(tf.keras.Model):
         self._bias_constraint = tf.keras.constraints.get(params['bias_constraint'])
 
         # embeddings
-        self.inputs_embedding_softmax_layer = WordEmbeddingShareWeights(
-            vocab_size=self._inputs_vocab_size, hidden_size=self._hidden_size
+        self.inputs_embedding_softmax_layer = WordEmbedding(
+            vocab_size=self._inputs_vocab_size, embedding_size=self._hidden_size
         )
-        self.targets_embedding_softmax_layer = WordEmbeddingShareWeights(
-            vocab_size=self._targets_vocab_size, hidden_size=self._hidden_size
+        self.targets_embedding_softmax_layer = WordEmbedding(
+            vocab_size=self._targets_vocab_size, embedding_size=self._hidden_size
         )
         self.position_embedding = TransformerPositionEmbedding(
             hidden_size=self._hidden_size
@@ -286,7 +288,7 @@ class Transformer(tf.keras.Model):
         cache['encoder_decoder_attention_mask'] = encoder_decoder_attention_mask
 
         decoded_ids, scores = beam_search.sequence_beam_search(
-            symbols_to_logits_fn=auto_regressive_decode_fn,
+            decode_next_logits_fn=auto_regressive_decode_fn,
             initial_ids=initial_ids,
             initial_cache=cache,
             vocab_size=self._targets_vocab_size,
@@ -294,7 +296,6 @@ class Transformer(tf.keras.Model):
             alpha=self._alpha,
             max_decode_length=max_decode_len,
             eos_id=EOS_ID,
-            padded_decode=self._padded_decode,
             dtype=self._dtype
         )
 
@@ -338,7 +339,7 @@ class Transformer(tf.keras.Model):
             decoder_input = self.targets_embedding_softmax_layer(decoder_input)
 
             # 位置编码
-            decoder_input += timing_signal[i: i + 1]
+            decoder_input += position_embeddings[i: i + 1]
 
             # 取出当前位置的 mask
             self_attention_mask = targets_look_ahead_mask[0, i:i + 1, :i + 1]
@@ -357,8 +358,7 @@ class Transformer(tf.keras.Model):
                             self_attention_mask
                         ],
                         training=training,
-                        cache=layer_cache,
-                        decode_loop_step=None
+                        cache=layer_cache
                     )
             logits = self.targets_embedding_softmax_layer(decoder_outputs, mode='linear')
             logits = tf.squeeze(logits, axis=[1])

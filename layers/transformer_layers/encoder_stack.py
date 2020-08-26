@@ -8,7 +8,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
 
     def __init__(
             self,
-            num_layers=6,
+            num_hidden_layers=6,
             num_attention_heads=8,
             intermediate_size=1024,
             intermediate_activation='relu',
@@ -27,7 +27,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
             **kwargs
     ):
         super(TransformerEncoderStack, self).__init__(**kwargs)
-        self._num_layers = num_layers
+        self._num_hidden_layers = num_hidden_layers
         self._num_attention_heads = num_attention_heads
         self._intermediate_size = intermediate_size
         self._intermediate_activation = intermediate_activation
@@ -57,7 +57,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         )
 
         self.encoder_layers = []
-        for i in range(self._num_layers):
+        for i in range(self._num_hidden_layers):
             self.encoder_layers.append(
                 encoder_layer.TransformerEncoderLayer(
                     num_attention_heads=self._num_attention_heads,
@@ -77,7 +77,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
 
     def get_config(self):
         config = {
-            'num_layers': self._num_layers,
+            'num_hidden_layers': self._num_hidden_layers,
             'num_attention_heads': self._num_attention_heads,
             'intermedia_size': self._intermediate_size,
             'intermediate_activation': self._intermediate_activation,
@@ -103,11 +103,12 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         base_config = super(TransformerEncoderStack, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, inputs_embeddings, padding_mask):
+    def call(self, inputs_embeddings, padding_mask, training):
 
-        for i in range(self._num_layers):
+        for i in range(self._num_hidden_layers):
             inputs_embeddings = self.encoder_layers[i](
-                [inputs_embeddings, padding_mask]
+                inputs=[inputs_embeddings, padding_mask],
+                training=training
             )
 
         encoder_outputs = inputs_embeddings

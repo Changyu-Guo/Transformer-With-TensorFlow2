@@ -20,6 +20,8 @@
       <w>punc</w>
       <w>regularizer</w>
       <w>subtoken</w>
+      <w>topk</w>
+      <w>unflatten</w>
       <w>wordpiece</w>
     </words>
   </dictionary>

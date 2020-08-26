@@ -1,15 +1,11 @@
 # -*- coding: utf - 8 -*-
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 import tensorflow as tf
 from layers.embedding_layers import word_embedding_layer
 
 
-class OnDeviceEmbeddingTest(tf.test.TestCase):
+class WordEmbeddingTest(tf.test.TestCase):
     def test_layer_creation(self):
         vocab_size = 31
         embedding_size = 27

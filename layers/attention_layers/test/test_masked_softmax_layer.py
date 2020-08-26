@@ -1,9 +1,5 @@
 # -*- coding: utf - 8 -*-
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 import tensorflow as tf
 from layers.attention_layers import masked_softmax_layer
@@ -32,9 +28,9 @@ class MaskedSoftmaxLayerTest(tf.test.TestCase):
         mask_data = np.random.randint(2, size=(3, 4, 8))
 
         output_data = model.predict([input_data, mask_data])
-        expected_zeros = np.greater(mask_data, 0)
-        is_zeros = np.greater(output_data, 0)
-        self.assertAllClose(expected_zeros, is_zeros)
+        expected_zeros = np.less(mask_data, 0)
+        is_zeros = np.less(output_data, 0)
+        self.assertAllEqual(expected_zeros, is_zeros)
 
     def test_masked_softmax_with_none_mask(self):
         test_layer = masked_softmax_layer.MaskedSoftmax()
@@ -59,8 +55,8 @@ class MaskedSoftmaxLayerTest(tf.test.TestCase):
 
         output_data = model.predict([input_data, mask_data])
         expanded_mask = np.expand_dims(mask_data, axis=1) * np.ones_like(input_data)
-        expected_zeros = np.greater(expanded_mask, 0)
-        is_zeros = np.greater(output_data, 0)
+        expected_zeros = np.less(expanded_mask, 0)
+        is_zeros = np.less(output_data, 0)
         self.assertAllEqual(expected_zeros, is_zeros)
 
     def test_masked_softmax_high_dims(self):
@@ -82,8 +78,8 @@ class MaskedSoftmaxLayerTest(tf.test.TestCase):
         expanded_mask = np.expand_dims(mask_data, axis=1)
         expanded_mask = np.expand_dims(expanded_mask, axis=1)
         expanded_mask = np.expand_dims(expanded_mask, axis=1) * np.ones_like(input_data)
-        expected_zeros = np.greater(expanded_mask, 0)
-        is_zeros = np.greater(output_data, 0)
+        expected_zeros = np.less(expanded_mask, 0)
+        is_zeros = np.less(output_data, 0)
         self.assertAllEqual(expected_zeros, is_zeros)
 
     def test_serialize_deserialize(self):

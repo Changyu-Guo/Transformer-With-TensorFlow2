@@ -1,9 +1,5 @@
 # -*- coding: utf - 8 -*-
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import math
 import string
 import collections
@@ -371,33 +367,10 @@ class CacheAttention(MultiHeadAttention):
             self,
             key,
             value,
-            cache,
-            decode_loop_step
+            cache
     ):
-        if decode_loop_step is not None:
-            key_seq_dim = cache['key'].shape.as_list()[1]
-            indices = tf.reshape(
-                tf.one_hot(
-                    indices=decode_loop_step,
-                    depth=key_seq_dim,
-                    dtype=key.dtype
-                ),
-                [1, key_seq_dim, 1, 1]
-            )
-            key = cache['key'] + key * indices
-            value_seq_dim = cache['value'].shape.as_list()[1]
-            indices = tf.reshape(
-                tf.one_hot(
-                    indices=decode_loop_step,
-                    depth=value_seq_dim,
-                    dtype=value.dtype
-                ),
-                [1, value_seq_dim, 1, 1]
-            )
-            value = cache['value'] + value * indices
-        else:
-            key = tf.concat([tf.cast(cache['key'], key.dtype), key], axis=1)
-            value = tf.concat([tf.cast(cache['value'], value.dtype), value], axis=1)
+        key = tf.concat([tf.cast(cache['key'], key.dtype), key], axis=1)
+        value = tf.concat([tf.cast(cache['value'], value.dtype), value], axis=1)
 
         cache['key'] = key
         cache['value'] = value
@@ -411,8 +384,7 @@ class CacheAttention(MultiHeadAttention):
             training,
             key=None,
             attention_mask=None,
-            cache=None,
-            decode_loop_step=None
+            cache=None
     ):
         if not self._built_from_signature:
             self._build_from_signature(query=query, value=value, key=key)
@@ -426,7 +398,7 @@ class CacheAttention(MultiHeadAttention):
         value = self._value_dense(value)
 
         if cache:
-            key, value = self._update_cache(key, value, cache, decode_loop_step)
+            key, value = self._update_cache(key, value, cache)
 
         query = tf.multiply(query, 1.0 / math.sqrt(float(self._size_per_head_for_query_and_key)))
 

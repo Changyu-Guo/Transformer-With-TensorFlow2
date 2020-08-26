@@ -8,7 +8,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
     
     def __init__(
             self,
-            num_layers=6,
+            num_hidden_layers=6,
             num_attention_heads=8,
             intermediate_size=1024,
             intermediate_activation='relu',
@@ -28,7 +28,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
     ):
         super(TransformerDecoderStack, self).__init__(**kwargs)
 
-        self._num_layers = num_layers
+        self._num_hidden_layers = num_hidden_layers
         self._num_attention_heads = num_attention_heads
         self._intermediate_size = intermediate_size
         self._intermediate_activation = intermediate_activation
@@ -58,7 +58,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         )
 
         self.decoder_layers = []
-        for i in range(self._num_layers):
+        for i in range(self._num_hidden_layers):
             self.decoder_layers.append(
                 decoder_layer.TransformerDecoderLayer(
                     num_attention_heads=self._num_attention_heads,
@@ -78,7 +78,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
 
     def get_config(self):
         config = {
-            'num_layers': self._num_layers,
+            'num_hidden_layers': self._num_hidden_layers,
             'num_attention_heads': self._num_attention_heads,
             'intermedia_size': self._intermediate_size,
             'intermediate_activation': self._intermediate_activation,
@@ -104,15 +104,24 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         base_config = super(TransformerEncoderStack, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, targets_embeddings, encoder_outputs, padding_mask, look_ahead_mask, cache=None):
+    @property
+    def num_attention_heads(self):
+        return self._num_attention_heads
+
+    @property
+    def num_hidden_layers(self):
+        return self._num_hidden_layers
+
+    def call(self, targets_embeddings, encoder_outputs, padding_mask, look_ahead_mask, training, cache=None):
 
         decoder_outputs = targets_embeddings
 
-        for i in range(self._num_layers):
-            decoder_inputs = [decoder_outputs, encoder_outputs, look_ahead_mask, padding_mask]
+        for i in range(self._num_hidden_layers):
+            decoder_inputs = [decoder_outputs, encoder_outputs, padding_mask, look_ahead_mask]
             if cache is None:
                 decoder_outputs, _ = self.decoder_layers[i](decoder_inputs)
             else:
+                # 对 cache 进行覆盖修改
                 cache_layer_idx = str(i)
                 decoder_outputs, cache[cache_layer_idx] = self.decoder_layers[i](
                     decoder_inputs,

@@ -1,9 +1,5 @@
 # -*- coding: utf - 8 -*-
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
@@ -155,7 +151,7 @@ class MultiHeadAttentionTest(keras_parameterized.TestCase):
         value = 10 * np.random.random_sample(value_shape)
 
         mask_data = np.random.randint(2, size=mask_shape).astype('bool')
-        output = test_layer(query=query, value=value, attention_mask=mask_data)
+        output = test_layer(query=query, value=value, attention_mask=mask_data, training=True)
 
         null_mask_data = np.ones(mask_shape)
         unmasked_output = test_layer(

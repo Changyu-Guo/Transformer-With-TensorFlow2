@@ -148,7 +148,7 @@ class BertEncoder(tf.keras.Model):
                 intermediate_activation=activation,
                 hidden_dropout_rate=hidden_dropout_rate,
                 attention_dropout_rate=attention_dropout_rate,
-                output_range=transformer_output_range,
+                # output_range=transformer_output_range,
                 kernel_initializer=initializer,
                 name='transformer/layer_%d' % i
             )

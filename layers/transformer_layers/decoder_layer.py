@@ -157,7 +157,7 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
         )
         super(TransformerDecoderLayer, self).build(input_shape)
 
-    def call(self, inputs, training, cache=None, decode_loop_step=None):
+    def call(self, inputs, training, cache=None):
         targets_tensor, encoder_output, encoder_decoder_attention_mask, self_attention_mask = inputs[:4]
         source_tensor = targets_tensor
         if self._norm_first:
@@ -168,8 +168,7 @@ class TransformerDecoderLayer(tf.keras.layers.Layer):
             query=targets_tensor,
             value=targets_tensor,
             attention_mask=self_attention_mask,
-            cache=cache,
-            decode_loop_step=decode_loop_step
+            cache=cache
         )
 
         if training:

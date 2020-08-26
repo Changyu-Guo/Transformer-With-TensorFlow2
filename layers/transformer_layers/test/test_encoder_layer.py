@@ -41,8 +41,8 @@ class EncoderLayerTest(keras_parameterized.TestCase):
         hidden_size = 80
 
         data_tensor = tf.keras.Input(shape=(seq_len, hidden_size))
-        mask_tensor = tf.keras.Input(shape=(seq_len, seq_len))
-        output_tensor = test_layer([data_tensor, mask_tensor], training=False)
+        mask_tensor = tf.keras.Input(shape=(1, seq_len))
+        output_tensor = test_layer([data_tensor, mask_tensor], training=True)
         self.assertEqual(data_tensor.shape.as_list(), output_tensor.shape.as_list())
 
     def test_layer_creation_with_error_mask_fails(self, transformer_cls):
